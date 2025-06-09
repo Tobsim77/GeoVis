@@ -14,6 +14,10 @@ if (!require(reshape2)) {install.packages("reshape2"); library(reshape2)}
 if (!require(bslib)) {install.packages("bslib"); library(bslib)}
 if (!require(rsconnect)) {install.packages("rsconnect"); library(rsconnect)}
 
+if (!require(terra)) {install.packages("terra"); library(terra)}
+
+
+
 
 metadata <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/synop-v1-1h/metadata")
 metadata2 <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")
@@ -491,7 +495,7 @@ server <- function(input, output, session) {
     
     output$plot_wiso <- renderPlotly({
       df_wiso |> dplyr::select(time, var, id, season) |> unique() |>
-        ggplot(aes(x = time, y = var)) +
+        ggplot(aes(x = time, y = var, col = season)) +
         geom_line() +
         facet_wrap(~season)
     })
@@ -576,8 +580,20 @@ server <- function(input, output, session) {
     
     within_extent <- points_df$lon >= xmin(raster_extent) & points_df$lon <= xmax(raster_extent) &
       points_df$lat >= ymin(raster_extent) & points_df$lat <= ymax(raster_extent)
+    ### zusatz 05-06-2025
     
-    elevation_values <- readRDS("elevation_values.rds")
+    srtm_austria <-rast("elevation/AUT_elv_msk.tif")
+    #AUT_elv_msk.tif
+    srtm_austria_cropped <- srtm_austria
+    
+    points_vect <- vect(points_df, geom = c("lon", "lat"), crs = crs(srtm_austria_cropped))
+    
+    elevation_values <- extract(srtm_austria_cropped, points_vect)
+    ### zusatz Ende
+    #elevation_values <- readRDS("elevation_values.rds")
+    
+    
+    
     points_with_elevation <- cbind(points_df, elevation = elevation_values[,2])
     
     res_x <- 0.008333333
