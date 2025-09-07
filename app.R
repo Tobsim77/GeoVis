@@ -68,7 +68,8 @@ ui <- navbarPage(
                  ),
                  nav_panel("History",
                            selectInput("switch", "Switch Visualisation", choices = c("Smooth", "Tiles")),
-                           selectInput("start_date_history", "Start Date", selected = 2000, choices = seq(1900, 2024)),
+                           selected ="Tiles",
+                           selectInput("start_date_history", "Start Date", selected = 2000, choices = seq(1900, year(Sys.Date()))),
                            plotlyOutput(outputId = "plot_history"),
                            textOutput("text_Location1"),
                            tableOutput(outputId = "table"),
@@ -93,8 +94,8 @@ ui <- navbarPage(
                            inputId = "year_slider",
                            label = "Years",
                            min = 1990,
-                           max = 2024,
-                           value = c(1990, 2024),
+                           max = year(Sys.Date()),
+                           value = c(1990, year(Sys.Date())),
                            dragRange = TRUE,
                            sep = ""
                          )
@@ -491,9 +492,9 @@ server <- function(input, output, session) {
     
     output$plot_wiso <- renderPlotly({
       df_wiso |> dplyr::select(time, var, id, season) |> unique() |>
-        ggplot(aes(x = time, y = var)) +
+        ggplot(aes(x = time, y = var, col = season)) +
         geom_line() +
-        facet_wrap(~season)
+        facet_wrap(~season) + theme_dark()
     })
     
     non_na_count_wiso <- df_wiso |> group_by(id, season) |> reframe(nonNacount = sum(!is.na(var))) |> as.data.frame()
@@ -569,17 +570,22 @@ server <- function(input, output, session) {
       ymax = 49.2
     )
     
-    points_df <- data.frame(
-      lon = df_linreg$lon |> na.omit(),
-      lat = df_linreg$lat |> na.omit()
-    )
+    points_df <- df_linreg |>
+      dplyr::select(lon, lat) |>
+      dplyr::filter(!is.na(lon), !is.na(lat)) |>
+      dplyr::distinct()
+    
+    points_df <- points_df |>
+      dplyr::filter(
+        lon >= xmin(raster_extent), lon <= xmax(raster_extent),
+        lat >= ymin(raster_extent), lat <= ymax(raster_extent)
+      )
     
     within_extent <- points_df$lon >= xmin(raster_extent) & points_df$lon <= xmax(raster_extent) &
       points_df$lat >= ymin(raster_extent) & points_df$lat <= ymax(raster_extent)
     
     elevation_values <- readRDS("elevation_values.rds")
-    points_with_elevation <- cbind(points_df, elevation = elevation_values[,2])
-    
+
     res_x <- 0.008333333
     res_y <- 0.008333333
     origin_x <- xmin(raster_extent)
