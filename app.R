@@ -19,6 +19,10 @@ metadata <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical
 metadata2 <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")
 metadata_monthly <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1m/metadata")
 
+
+
+
+
 ## custom functions for workaround of shiny because it cant load terra or raster
 #' Return the xmin value from a bounding-box data frame
 xmin <- function(df, row = 1) {
@@ -67,8 +71,7 @@ ui <- navbarPage(
                            tableOutput(outputId = "table_aktuell")
                  ),
                  nav_panel("History",
-                           selectInput("switch", "Switch Visualisation", choices = c("Smooth", "Tiles")),
-                           selected ="Tiles",
+                           selectInput("switch", "Switch Visualisation", choices = c("Tiles","Smooth")),
                            selectInput("start_date_history", "Start Date", selected = 2000, choices = seq(1900, year(Sys.Date()))),
                            plotlyOutput(outputId = "plot_history"),
                            textOutput("text_Location1"),
@@ -161,7 +164,7 @@ ui <- navbarPage(
   ),
   tabPanel("3D",
            fluidRow(checkboxInput("weighted_switch3", label = "Weighted", value = FALSE)),
-           fluidRow({ plotlyOutput("map_with_slopes") })
+           fluidRow(class = "fill-row", plotlyOutput("map_with_slopes", width = "100%", height = "100%") )
   )
 )
 
@@ -408,18 +411,35 @@ server <- function(input, output, session) {
     df <- df |> arrange(altitude) |>
       mutate(ordered_name = factor(paste(name, altitude), levels = unique(paste(name, altitude))))
     
-    get_slope <- function(x) {
+   
+    
+    #x|> select( var, time_numeric,id)|> filter(id >200)|>distinct()|> ggplot(aes(time_numeric, var))+geom_point()+ facet_grid( id~. ) 
+    
+    get_coefficians <- function(x) {
       x <- x |> mutate(min_time = x |> filter(!is.na(var)) |> pull(time) |> min(),
                        time_numeric = as.numeric(difftime(time, min_time, units = "days")) / 365.25)
-      coef(lm(var ~ time_numeric, data = drop_na(x, var)))["time_numeric"]
+      coef(summary(lm(var ~ time_numeric, data = drop_na(x, var))))
+    }
+    
+    
+    get_slope <- function(x) {
+      get_coefficians(x)["time_numeric","Estimate"]
     }
     
     get_intercept <- function(x) {
-      x <- x |> mutate(time_numeric = as.numeric(difftime(time, min(time), units = "days")) / 365.25)
-      coef(lm(var ~ time_numeric, data = drop_na(x, var)))["(Intercept)"]
+      get_coefficians(x)["(Intercept)","Estimate"]
     }
     
+    get_standard_error <- function(x) {
+      get_coefficians(x)["time_numeric","Std. Error"]
+    }
+    
+    
+    
+  
+    
     non_na_count <- df |> group_by(id) |> reframe(nonNacount = sum(!is.na(var))) |> as.data.frame()
+    
     df_first_non_na <- df |> 
       filter(!is.na(var)) |>              
       group_by(id) |>                          
@@ -436,15 +456,21 @@ server <- function(input, output, session) {
       max(na.rm = TRUE)
     
     timesteps <- n_distinct(df$time)[1]
-    
+    #old weight : (nonNacount / timesteps)
     df_linreg <- df |> group_by(id) |> reframe(
       time_range_months = as.double((max(time) - first_date) / 12),
       time_range_years = as.double((max(time) - first_date) / 365),
       slope = as.double(get_slope(pick(everything()))),
-      slope_weighted = slope * (nonNacount / timesteps)
+      weight = 1/(get_standard_error(pick(everything()))^2),
+      slope_weighted = slope * weight
     ) |> unique()
     
     df_linreg <- left_join(df, df_linreg)
+    
+    
+    
+    
+    
     
     output$plot_slopes <- renderPlotly({
       ggplotly(df |> ggplot(aes(x = time, y = (altitude + var), colour = ordered_name)) +
@@ -508,12 +534,15 @@ server <- function(input, output, session) {
     df_wiso <- left_join(df_wiso, df_first_non_na_wiso)
     
     timesteps_wiso <- n_distinct(df_linreg$time)[1]
+    # old weight = (nonNacount / timesteps_wiso) * 12
+    
     
     df_linreg_wiso <- df_wiso |> group_by(season, id) |> reframe(
       time_range_months = as.double((max(time) - first_date) / 12),
       time_range_years = as.double((max(time) - first_date) / 365),
       slope = as.double(get_slope(pick(everything()))),
-      slope_weighted = slope * (nonNacount / timesteps_wiso) * 12
+      weight = 1/(get_standard_error(pick(everything()))^2),
+      slope_weighted = slope * weight
     ) |> unique()
     
     df_linreg_wiso <- left_join(df_wiso, df_linreg_wiso)
