@@ -128,8 +128,19 @@ ui <- navbarPage(
   tabPanel("Slopes",
            navset_tab(
              nav_panel("Slopes",
-                       div({ plotlyOutput("plot_slopes") })
+                       div({ plotlyOutput("plot_slopes",height = "75vh") })
              ),
+             nav_panel("Missing Data",
+                       
+                       
+                         selectInput(inputId  = "sort_missing_by_variable",
+                                     label = "Sort by",
+                                     choices = c("nonNacount","altitude","name","time_range_years"),
+                                     selected = "nonNacount"
+                                     ),
+                         plotlyOutput("plot_missing",height = "75vh") 
+             ),
+             
              nav_panel("Slopes Comparison",
                        fluidRow(
                          column(
@@ -139,32 +150,32 @@ ui <- navbarPage(
                          ),
                          column(
                            width = 9,
-                           plotlyOutput("plot_lin_reg")
+                           plotlyOutput("plot_lin_reg", height = "75vh")
                          )
                        )
              ),
              nav_panel("Slopes LinReg",     
                        checkboxInput("weighted_switch2", label = "Weighted", value = FALSE),
-                       fluidRow({ plotlyOutput("slope_wsmooth") })
+                       fluidRow({ plotlyOutput("slope_wsmooth",height = "75vh") })
              )
            )
   ),
   tabPanel("Seasons",
            navset_tab(
              nav_panel("Jahreszeiten",
-                       div({ plotlyOutput("plot_wiso") })
+                       div({ plotlyOutput("plot_wiso",height = "75vh") })
              ),
              nav_panel("Seasonal Slopes",
-                       div({ plotlyOutput("seasonal_slopes") })
+                       div({ plotlyOutput("seasonal_slopes",height = "75vh") })
              ),
              nav_panel("Seasonal Slopes Weighted",
-                       div({ plotlyOutput("seasonal_slopes_weighted") })
+                       div({ plotlyOutput("seasonal_slopes_weighted",height = "75vh") })
              )
            )
   ),
   tabPanel("3D",
            fluidRow(checkboxInput("weighted_switch3", label = "Weighted", value = FALSE)),
-           fluidRow(class = "fill-row", plotlyOutput("map_with_slopes", width = "100%", height = "100%") )
+           fluidRow(class = "fill-row", plotlyOutput("map_with_slopes", width = "100%", height = "75vh") )
   )
 )
 
@@ -477,15 +488,25 @@ server <- function(input, output, session) {
                  geom_smooth(method = "lm", se = FALSE, na.rm = TRUE))
     })
     
+    #.data[[slope_col]]
+    
+    output$plot_missing <- renderPlotly({
+      ggplotly(df_linreg |>distinct()|> mutate(name = reorder(name, .data[[input$sort_missing_by_variable]])) |> ggplot()+ 
+                 geom_tile(aes(x= time, y= name , fill = var))+
+                 scale_fill_gradientn(colors = hcl.colors(20, "ag_Sunset")))
+    })
+    
+    
+    
     output$plot_lin_reg <- renderPlotly({
       if (!input$weighted_switch) {
         df_linreg |> dplyr::select(altitude, name, slope) |> unique() |>
           plot_ly(x = ~altitude, y = ~slope * input$time_multiplyer, text = ~name, hovertext = ~name, hoverinfo = ~name, type = "bar", marker = list(color = "orange")) |>
-          layout(title = "Change per 10-Years in °C")
+          layout(title = paste0("Change per ",input$time_multiplyer,"-Years in °C"))
       } else {        
         df_linreg |> dplyr::select(altitude, name, slope_weighted) |> unique() |>
           plot_ly(x = ~altitude, y = ~slope_weighted * input$time_multiplyer, text = ~name, hovertext = ~name, hoverinfo = ~name, type = "bar", marker = list(color = "orange")) |>
-          layout(title = "Change per 10-Years in °C")
+          layout(title = paste0("Change per ",input$time_multiplyer,"-Years in °C"))
       }
     })
     
