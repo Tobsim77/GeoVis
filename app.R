@@ -52,13 +52,13 @@ ui <- navbarPage(
                width = 3,
                selectInput(inputId = "location",
                            label = "Location",
-                           choices = c("ÖSTERREICH", fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/synop-v1-1h/metadata")$stations |> 
+                           choices = c("ÖSTERREICH", metadata$stations |> 
                                          filter(is_active == "TRUE" & name != "MAYRHOFEN") |> pull(name)),
                            selected = "SALZBURG-FLUGHAFEN"
                ),
                selectInput(inputId  = "variables",
                            label = "Variables",
-                           choices = fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/synop-v1-1h/metadata")$parameters |> 
+                           choices = metadata$parameters |> 
                              filter(!(unit %in% c("Code (Synop)", NA, "Code", ""))) |> dplyr::select(long_name) |>
                              c("Höhe der tiefsten Wolken", "Neuschneehöhe"),
                            selected = "Lufttemperatur"
@@ -88,9 +88,9 @@ ui <- navbarPage(
                        sidebarPanel(
                          selectInput(inputId = "location2",
                                      label = "Location",
-                                     choices = c("ÖSTERREICH", sort(fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")$station |> 
+                                     choices = c("ÖSTERREICH", sort(metadata2$station |> 
                                                                       filter(type == "COMBINED") |> pull(name))),
-                                     selected = fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")$station |> 
+                                     selected = metadata2$station |> 
                                        filter(type == "COMBINED") |> dplyr::select(name) |> head(1)
                          ),
                          sliderInput(
@@ -108,16 +108,16 @@ ui <- navbarPage(
                            nav_panel("Trend",
                                      selectInput(inputId  = "variables2",
                                                  label = "Variable",
-                                                 choices = fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")$parameters |>
+                                                 choices = metadata2$parameters |>
                                                    filter(!(unit %in% c("Code (Synop)", NA, "Code", "", "°"))) |> dplyr::select(long_name) |> filter(!grepl("Beobachtungstermin", long_name)) |> 
                                                    c("Gesamtschneehöhe zum Beobachtungstermin I"),
                                                  selected = "Lufttemperaturmittel 2m"),
                                      textOutput("text2"),
-                                     plotOutput("plot1")
+                                     plotlyOutput("plot1")
                            ),
                            nav_panel("Hitzewellen",
                                      textOutput("text_heatwave"),
-                                     plotOutput(outputId = "heatwave_plot"),
+                                     plotlyOutput(outputId = "heatwave_plot"),
                                      textOutput("text_heatwave_def")
                            )
                          )
@@ -127,18 +127,20 @@ ui <- navbarPage(
   ),
   tabPanel("Slopes",
            navset_tab(
-             nav_panel("Slopes",
-                       div({ plotlyOutput("plot_slopes",height = "75vh") })
-             ),
+             
              nav_panel("Missing Data",
                        
                        
                          selectInput(inputId  = "sort_missing_by_variable",
                                      label = "Sort by",
                                      choices = c("nonNacount","altitude","name","time_range_years"),
-                                     selected = "nonNacount"
+                                     selected = "time_range_years"
                                      ),
-                         plotlyOutput("plot_missing",height = "75vh") 
+                         plotlyOutput("plot_missing",height = "75vh",width ="90vw") 
+             ),
+             
+             nav_panel("Slopes",
+                       div({ plotlyOutput("plot_slopes",height = "75vh",width ="90vw") })
              ),
              
              nav_panel("Slopes Comparison",
@@ -150,26 +152,26 @@ ui <- navbarPage(
                          ),
                          column(
                            width = 9,
-                           plotlyOutput("plot_lin_reg", height = "75vh")
+                           plotlyOutput("plot_lin_reg", height = "75vh",width ="90vw")
                          )
                        )
              ),
              nav_panel("Slopes LinReg",     
                        checkboxInput("weighted_switch2", label = "Weighted", value = FALSE),
-                       fluidRow({ plotlyOutput("slope_wsmooth",height = "75vh") })
+                       fluidRow({ plotlyOutput("slope_wsmooth",height = "75vh",width ="90vw") })
              )
            )
   ),
   tabPanel("Seasons",
            navset_tab(
              nav_panel("Jahreszeiten",
-                       div({ plotlyOutput("plot_wiso",height = "75vh") })
+                       div({ plotlyOutput("plot_wiso",height = "75vh",width ="90vw") })
              ),
              nav_panel("Seasonal Slopes",
-                       div({ plotlyOutput("seasonal_slopes",height = "75vh") })
+                       div({ plotlyOutput("seasonal_slopes",height = "75vh", width ="90vw" ) })
              ),
              nav_panel("Seasonal Slopes Weighted",
-                       div({ plotlyOutput("seasonal_slopes_weighted",height = "75vh") })
+                       div({ plotlyOutput("seasonal_slopes_weighted",height = "75vh", width ="90vw") })
              )
            )
   ),
@@ -369,28 +371,28 @@ server <- function(input, output, session) {
     df_mean_temps <- df2 |> group_by(year) |> reframe(mean_temps = mean(var, na.rm = TRUE))
     df_mean_temps <- df_mean_temps |> mutate(mean_temps = mean_temps - mean(mean_temps, na.rm = TRUE))
     
-    output$plot1 <- renderPlot({
-      df_mean_temps |> filter(year >= year(as.Date(start_date2)) & year <= year(as.Date(end_date2))) |> ggplot() +
+    output$plot1 <- renderPlotly({
+      ggplotly(df_mean_temps |> select(year,mean_temps)|> filter(year >= year(as.Date(start_date2)) & year <= year(as.Date(end_date2))) |> ggplot() +
         geom_col(aes(x = year, y = mean_temps, fill = mean_temps)) + 
         scale_fill_gradient(low = "blue", high = "red") +
         labs(y = "Abweichung vom Durchschnitt", fill = "Abweichung vom Durchschnitt") +
         scale_x_continuous(breaks = seq(min(df_mean_temps$year), max(df_mean_temps$year), by = 5), labels = as.character(seq(min(df_mean_temps$year), max(df_mean_temps$year), by = 5))) +
         geom_smooth(aes(x = year, y = mean_temps), colour = "black", linewidth = 0.5, method = "lm", se = FALSE, na.rm = TRUE) +
-        theme_bw()
+        theme_bw())
     })
     
     output$text2 <- renderText({ c("Abweichung des Parameters ", input$variables2, " vom Gesamtdurchschnitt in ", input$location2) })
     output$text_heatwave <- renderText({ "Anzahl der Hitzewelle pro Jahr" })
     output$text_heatwave_def <- renderText({ "Eine Hitzewelle wird festgestellt, sobald an mindestens drei Tagen in Folge die Maximaltemperatur 30 °C überschritten wird" })
     
-    output$heatwave_plot <- renderPlot({
-      df_heatwave |> ggplot(aes(x = year, y = heatwaves, fill = heatwaves)) +
+    output$heatwave_plot <- renderPlotly({
+      ggplotly(df_heatwave |> select(year,heatwaves)|> ggplot(aes(x = year, y = heatwaves, fill = heatwaves)) +
         geom_col() + 
         scale_fill_continuous(low = "yellow", high = "red") +
         labs(y = "Anzahl der Hitzewellen", x = "Year", fill = "Anzahl") +
         scale_x_continuous(breaks = seq(min(df_heatwave$year), max(df_heatwave$year), by = 5), labels = as.character(seq(min(df_heatwave$year), max(df_heatwave$year), by = 5))) +
         scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
-        theme_bw()
+        theme_bw())
     })
   })
   
@@ -473,10 +475,22 @@ server <- function(input, output, session) {
       time_range_years = as.double((max(time) - first_date) / 365),
       slope = as.double(get_slope(pick(everything()))),
       weight = 1/(get_standard_error(pick(everything()))^2),
-      slope_weighted = slope * weight
+      weight2 = (1/(get_standard_error(pick(everything()))^2))*(time_range_years/max_time_range) * (nonNacount/max(non_na_count$nonNacount)),
+      slope_weighted = slope * weight2
     ) |> unique()
     
     df_linreg <- left_join(df, df_linreg)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     
@@ -488,7 +502,8 @@ server <- function(input, output, session) {
                  geom_smooth(method = "lm", se = FALSE, na.rm = TRUE))
     })
     
-    #.data[[slope_col]]
+    
+    
     
     output$plot_missing <- renderPlotly({
       ggplotly(df_linreg |>distinct()|> mutate(name = reorder(name, .data[[input$sort_missing_by_variable]])) |> ggplot()+ 
@@ -563,7 +578,8 @@ server <- function(input, output, session) {
       time_range_years = as.double((max(time) - first_date) / 365),
       slope = as.double(get_slope(pick(everything()))),
       weight = 1/(get_standard_error(pick(everything()))^2),
-      slope_weighted = slope * weight
+      weight2 = (1/(get_standard_error(pick(everything()))^2))*(time_range_years/max_time_range) * (nonNacount/max(non_na_count$nonNacount)),
+      slope_weighted = slope * weight2
     ) |> unique()
     
     df_linreg_wiso <- left_join(df_wiso, df_linreg_wiso)
@@ -662,13 +678,21 @@ server <- function(input, output, session) {
     points_df <- points_df |> left_join(df_linreg |> dplyr::select(lat, lon, id, slope, slope_weighted, altitude, name) |> na.omit() |> unique())
     
     custom_colorscale <- list(
-      c(0, "cyan"),
-      c(0.3, "yellow"),
-      c(0.6, "orange"),
+      c(0, "blue"),
+      c(0.5, "#da92e8"),
       c(1, "red")
     )
+    etopo_colorscale <- list(
+      list(0.00, "#124502"),
+      list(0.20, "#aac486"),
+      list(0.30, "#e6e6b8"),
+      list(0.5, "#996633"),
+      list(0.7, "#996633"),
+      list(1.00, "#ffffff")
+    )
     
-    plot_map <- plot_ly(z = ~(elevation_matrix), type = "surface", showscale = FALSE) |>
+    
+    plot_map <- plot_ly(z = ~(elevation_matrix), type = "surface", showscale = FALSE, colorscale = etopo_colorscale) |>
       layout(
         scene = list(
           aspectmode = "manual",
@@ -707,13 +731,13 @@ server <- function(input, output, session) {
           plot_ly(
             x = ~matrix_col_index,
             y = ~matrix_row_index,
-            z = ~elevation_matrix + 250,
+            z = ~(elevation_matrix)+250,
             hovertext = ~paste("name:", name, "\nslope:", slope),
             type = "scatter3d",
             mode = "markers",
             marker = list(
               size = 3,
-              color = ~slope_weighted * 10,
+              color = ~slope_weighted,
               colorscale = custom_colorscale,
               colorbar = list(title = "Slope")
             )
