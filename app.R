@@ -496,7 +496,6 @@ server <- function(input, output, session) {
     
     
     
-    
     output$plot_slopes <- renderPlotly({
       ggplotly(df |> ggplot(aes(x = time, y = (altitude + var), colour = ordered_name)) +
                  geom_smooth(method = "lm", se = FALSE, na.rm = TRUE))
