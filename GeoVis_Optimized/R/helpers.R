@@ -89,15 +89,31 @@ metric_card <- function(title, value, subtitle = NULL) {
 
 locate_data_root <- function(app_dir) {
   local_files <- c("elevation_matrix.rds", "raster_extent.rds")
-  parent_dir <- normalizePath(file.path(app_dir, ".."), winslash = "/", mustWork = TRUE)
-
-  if (all(file.exists(file.path(app_dir, local_files)))) {
-    normalizePath(app_dir, winslash = "/", mustWork = TRUE)
-  } else if (all(file.exists(file.path(parent_dir, local_files)))) {
-    parent_dir
-  } else {
-    stop("Could not locate the GeoVis data files next to the optimized app or its parent folder.", call. = FALSE)
+  local_geovis <- Sys.getenv("GEOVIS_PATH", unset = "")
+  if (!nzchar(local_geovis)) {
+    local_geovis <- "H:/Tobi/Desktop/GeoVis"
   }
+
+  parent_dir <- tryCatch(
+    normalizePath(file.path(app_dir, ".."), winslash = "/", mustWork = TRUE),
+    error = function(e) ""
+  )
+
+  candidates <- unique(c(local_geovis, app_dir, parent_dir))
+  for (candidate in candidates) {
+    if (!nzchar(candidate)) {
+      next
+    }
+    if (all(file.exists(file.path(candidate, local_files)))) {
+      return(normalizePath(candidate, winslash = "/", mustWork = FALSE))
+    }
+  }
+
+  stop(
+    "Could not locate the GeoVis data files. Checked ",
+    paste(candidates[nzchar(candidates)], collapse = ", "),
+    call. = FALSE
+  )
 }
 
 build_query <- function(params) {
