@@ -14,6 +14,27 @@ if (!require(reshape2)) {install.packages("reshape2"); library(reshape2)}
 if (!require(bslib)) {install.packages("bslib"); library(bslib)}
 if (!require(rsconnect)) {install.packages("rsconnect"); library(rsconnect)}
 
+## Lokaler GeoVis-Pfad (Windows-Desktop). Alternativ: Sys.setenv(GEOVIS_PATH = "...")
+LOCAL_GEOVIS_PATH <- "H:/Tobi/Desktop/GeoVis"
+
+geovis_root <- local({
+  env_path <- Sys.getenv("GEOVIS_PATH", unset = "")
+  candidates <- unique(c(env_path, LOCAL_GEOVIS_PATH, getwd()))
+  marker_files <- c("elevation_matrix.rds", "app.R")
+  for (candidate in candidates) {
+    if (!nzchar(candidate)) {
+      next
+    }
+    if (all(file.exists(file.path(candidate, marker_files)))) {
+      return(normalizePath(candidate, winslash = "/", mustWork = FALSE))
+    }
+  }
+  normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+})
+
+geovis_file <- function(...) {
+  file.path(geovis_root, ...)
+}
 
 metadata <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/synop-v1-1h/metadata")
 metadata2 <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v1-1d/metadata")
@@ -606,7 +627,7 @@ server <- function(input, output, session) {
       unique() %>%
       na.omit()
     
-    elevation_matrix <- readRDS("elevation_matrix.rds")
+    elevation_matrix <- readRDS(geovis_file("elevation_matrix.rds"))
     
     output$austria3d <- renderPlotly({
       plot_ly(z = ~(elevation_matrix), type = "surface") |>
@@ -649,7 +670,7 @@ server <- function(input, output, session) {
     within_extent <- points_df$lon >= xmin(raster_extent) & points_df$lon <= xmax(raster_extent) &
       points_df$lat >= ymin(raster_extent) & points_df$lat <= ymax(raster_extent)
     
-    elevation_values <- readRDS("elevation_values.rds")
+    elevation_values <- readRDS(geovis_file("elevation_values.rds"))
 
     res_x <- 0.008333333
     res_y <- 0.008333333
