@@ -1,0 +1,46 @@
+
+
+selected_year = 2026
+
+ggplotly(
+  df_daily|>filter(year <=selected_year ) |>mutate(selected= year == selected_year)|>
+    left_join(df_daily|>filter(year <=selected_year )|>
+                mutate(selected= year == selected_year)|>
+                group_by(selected,yearday)|>
+                summarise(var_min=min(var,na.rm= T) ,
+                          var_mean=mean(var,na.rm= T),
+                          var_max=max(var,na.rm= T) ,
+                          .groups = "drop"),by = c("yearday", "selected"))|> 
+                filter(is.finite(var)) |> 
+                ggplot() +
+                geom_ribbon(data= ~filter(.x,selected==F),aes(x = yearday, y = var,ymax = var_max,ymin = var_min),fill ="grey",alpha = .6 ) +
+                geom_line(data= ~filter(.x,selected==F),aes(x= yearday,y = var_mean), col = "black")+
+                geom_line(data=~filter(.x,selected==T),aes(x = yearday,y = var, col = factor(year),group = year), size = .4)+
+                theme_bw())
+
+##Cutoff:
+
+
+cutoff_year = 2024
+
+ggplotly(
+  df_daily |>mutate(after_cutoff= year >= cutoff_year)|>
+    left_join(df_daily|>
+                mutate(after_cutoff= year >= cutoff_year)|>
+                group_by(after_cutoff,yearday)|>
+                summarise(var_min=min(var,na.rm= T) ,
+                          var_mean=mean(var,na.rm= T),
+                          var_max=max(var,na.rm= T) ,
+                          .groups = "drop"),by = c("yearday", "after_cutoff"))|> 
+    filter(is.finite(var)) |> 
+    ggplot() +
+    geom_ribbon(data= ~filter(.x,after_cutoff==F),aes(x = yearday, y = var,ymax = var_max,ymin = var_min),fill ="grey",alpha = .6 ) +
+    geom_line(data= ~filter(.x,after_cutoff==F),aes(x= yearday,y = var_mean), col = "black")+
+    geom_line(data=~filter(.x,after_cutoff==T),aes(x = yearday,y = var, col = factor(year),group = year), size = .4)+
+    theme_bw())
+
+
+
+  
+  
+  

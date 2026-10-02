@@ -1,0 +1,26 @@
+if(F){
+library(terra)
+
+dem_df <- as.data.frame(
+  rast("INCA_v2_DEM.nc"), #https://public.hub.geosphere.at/public/public.html?id=misc
+  xy = TRUE,
+  na.rm = TRUE
+)|>
+  st_as_sf(
+    coords = c("x", "y"),
+    crs = 31287
+  ) |> st_transform(3416)
+
+coords <- st_coordinates(dem_df)
+
+dem_1km <- dem_df|> 
+  st_drop_geometry() |>
+  mutate(
+    X = coords[, 1],
+    Y = coords[, 2],
+    altitude = ZH
+  )|> select(-ZH)
+
+#dem_1km|> ggplot(aes(X,Y, fill = altitude))+geom_tile(height = 1000, width = 1000)+coord_equal()
+
+saveRDS(dem_1km,"df_elevation.rds")}

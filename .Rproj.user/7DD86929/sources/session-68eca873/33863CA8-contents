@@ -1,0 +1,435 @@
+
+if (!require(tidyr)) {install.packages("tidyr"); library(tidyr)}
+if (!require(dplyr)) {install.packages("dplyr"); library(dplyr)}
+if (!require(tidyverse)) {install.packages("tidyverse"); library(tidyverse)}
+if (!require(lubridate)) {install.packages("lubridate"); library(lubridate)}
+if (!require(readxl)) {install.packages("readxl"); library(readxl)}
+if (!require(shiny)) {install.packages("shiny"); library(shiny)}
+if (!require(jsonlite)) {install.packages("jsonlite"); library(jsonlite)}
+if (!require(plotly)) {install.packages("plotly"); library(plotly)}
+if (!require(scales)) {install.packages("scales"); library(scales)}
+if (!require(reshape2)) {install.packages("reshape2"); library(reshape2)}
+if (!require(bslib)) {install.packages("bslib"); library(bslib)}
+if (!require(rsconnect)) {install.packages("rsconnect"); library(rsconnect)}
+if (!require(stringi)) {install.packages("stringi"); library(stringi)}
+if (!require(sf)) {install.packages("sf"); library(sf)}
+if (!require(patchwork)) {install.packages("patchwork"); library(patchwork)}
+
+metadata_grid <- if (file.exists("metadata_km.json")) {
+  fromJSON("metadata_km.json")
+} else {
+  fromJSON("https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v3-1m-1km/metadata")
+}
+
+
+bbox <- paste(metadata_grid$bbox_outer, collapse = ",")
+
+
+
+link_grid <- "https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v2-1y-1km"
+
+
+date0 <- seq(as.Date(metadata_grid$start_time), as.Date(metadata_grid$end_time), by = "1 year")
+
+
+df <- tibble(Date = date0, link = link_grid)|> mutate(link = paste0(link,
+                                                                    "?parameters=TM&start=", format(date0, "%Y-%m-%dT00:00"),
+                                                                    "&end=",   format(date0, "%Y-%m-%dT00:00") ,
+                                                                    "&bbox=", bbox,
+                                                                    "&output_format=geojson"))
+datasets <- purrr::map(df$link, sf::read_sf)
+#df$dataset <- I(datasets) #just for loading
+
+
+#saveRDS(df, "~/historical_grid_data.rds") #just for loading
+
+
+df_grid<-readRDS("~/historical_grid_data.rds")
+
+df_grid<-df_grid |> mutate(dataset = map2(dataset,Date, \(dataset,Date ) dataset|>mutate(year = year(Date))))
+dat <- df_grid$dataset[[1]]
+
+# df_elevation <- read_rds("df_elevation.rds")|> st_as_sf(
+#   coords = c("lon", "lat"),
+#   crs = 4326,
+#   remove = FALSE
+# )|> st_transform(3416)
+# 
+# df_elevation <- bind_cols(st_drop_geometry(df_elevation),as_tibble(st_coordinates(df_elevation)))
+# 
+
+# df_grid <- df_grid$dataset |> map(function(dat){
+#   
+#   dat$TM <- as.numeric(
+#     stri_match_first_regex(
+#       dat$parameters,
+#       '"TM"\\s*:\\s*\\{.*?"data"\\s*:\\s*\\[\\s*(-?[0-9.]+)'
+#     )[, 2]
+#   )
+#   
+#   
+#   
+#   sf_geo <- dat |> st_transform(3416)
+#   sf_geo <- bind_cols(st_drop_geometry(sf_geo),as_tibble(st_coordinates(sf_geo)))|> 
+#     select(-parameters)
+#   
+# })|> bind_rows()
+# 
+# 
+# 
+# df_grid|> group_by(X,Y)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|> ggplot(aes(X,Y, fill = amount_na))+geom_tile(width = 1000, height = 1000)+coord_equal()
+# df_grid|> group_by(year)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|>ggplot(aes(year, amount_na))+geom_point()+geom_line()
+# 
+# 
+# df_grid<-df_grid |> left_join(df_elevation, by = c("X","Y"))
+#slopes<- df_grid|> drop_na()|> group_by(X,Y)|> summarise(slope = coef(lm(TM~year, data = pick(everything())))[2], .groups = "drop")
+
+
+#saveRDS(slopes,"slopes.rds")
+#saveRDS(df_elevation,"df_elevation.rds")
+
+
+slopes<-read_rds("slopes.rds")
+
+slopes <- slopes |>
+  mutate(
+    X = round((X - 500) / 1000) * 1000 + 500,
+    Y = round((Y - 500) / 1000) * 1000 + 500
+  )
+df_elevation<-read_rds("df_elevation.rds")
+
+df_elevation<-df_elevation|>
+  mutate(
+    X = round((X - 500) / 1000) * 1000 + 500,
+    Y = round((Y - 500) / 1000) * 1000 + 500
+  )
+
+temp_pal <- c(
+  "#3C0217", 
+  "#550C26", 
+  "#6B1631", 
+  "#84203E", 
+  "#9B294C",
+  "#AA4C4D", 
+  "#B76D4C", 
+  "#BB8553", 
+  "#BA9860",
+  "#BEA875",
+  "#A8A57C", 
+  "#859783", 
+  "#618886", 
+  "#417C8B", 
+  "#287390",
+  "#276587", 
+  "#285A7E", 
+  "#254E75", 
+  "#26426E", 
+  "#2F4774",
+  "#415B85", 
+  "#88A2CA", 
+  "#91AED3",
+  "#C4D3EC",
+  "#DCE8F7"
+)
+
+
+
+
+p1<-slopes |>
+  ggplot(aes(X, Y, fill = slope)) +
+  geom_tile(width = 1000, height=1000) +
+  coord_equal()+ scale_fill_gradientn(colours = c("#3C0217", 
+                                                  "#550C26", 
+                                                  "#6B1631", 
+                                                  "#84203E", 
+                                                  "#9B294C",
+                                                  "#AA4C4D", 
+                                                  "#B76D4C", 
+                                                  "#BB8553", 
+                                                  "#BA9860",
+                                                  "#BEA875",
+                                                  "#A8A57C", 
+                                                  "#859783", 
+                                                  "#618886", 
+                                                  "#417C8B", 
+                                                  "#287390",
+                                                  "#276587", 
+                                                  "#285A7E", 
+                                                  "#254E75", 
+                                                  "#26426E", 
+                                                  "#2F4774",
+                                                  "#415B85", 
+                                                  "#88A2CA", 
+                                                  "#91AED3",
+                                                  "#C4D3EC",
+                                                  "#DCE8F7")|>rev(),
+                                      rescaler = ~ scales::rescale_mid(.x, mid = 0)) 
+
+etopo_colorscale <- c("#124502","#aac486","#e6e6b8", "#996633", "#996633","#ffffff")
+
+p2<-ggplot(df_elevation, aes(X,Y,fill = altitude))+geom_tile(width = 1000, height=1000)+scale_fill_gradientn(colors = etopo_colorscale)+coord_equal()
+colours <- c("#3C0217", 
+             "#550C26", 
+             "#6B1631", 
+             "#84203E", 
+             "#9B294C",
+             "#AA4C4D", 
+             "#B76D4C", 
+             "#BB8553", 
+             "#BA9860",
+             "#BEA875",
+             "#A8A57C", 
+             "#859783", 
+             "#618886", 
+             "#417C8B", 
+             "#287390",
+             "#276587", 
+             "#285A7E", 
+             "#254E75", 
+             "#26426E", 
+             "#2F4774",
+             "#415B85", 
+             "#88A2CA", 
+             "#91AED3",
+             "#C4D3EC",
+             "#DCE8F7")|>rev()
+
+
+
+ui1<-fluidPage(title = "Test",
+                  plotlyOutput("plot1", width = "100%",height = "90vh"),
+                  plotlyOutput("plot2",width = "100%",height = "90vh")
+                )
+
+
+
+
+server1 <- function(input, output, session) {
+  
+
+output$plot1<-renderPlotly({ggplotly(p1)})
+output$plot2<-renderPlotly({ggplotly(p2)})
+
+
+}
+
+shinyApp(ui = ui1, server = server1)
+
+
+# -----------------------------------------------------------------------------
+# 1. Daten vorbereiten
+# -----------------------------------------------------------------------------
+
+df_3d <- slopes |>
+  select(X, Y, slope) |>
+  left_join(
+    df_elevation |>
+      select(X, Y, altitude),
+    by = c("X", "Y")
+  ) |>
+  drop_na(slope, altitude)
+
+
+# -----------------------------------------------------------------------------
+# 2. Koordinaten auf das 1-km-Raster zurücksetzen
+#    Falls deine Rasterzentren bei ...500 liegen
+# -----------------------------------------------------------------------------
+
+df_3d <- df_3d |>
+  mutate(
+    X = round((X - 500) / 1000) * 1000 + 500,
+    Y = round((Y - 500) / 1000) * 1000 + 500
+  ) |>
+  group_by(X, Y) |>
+  summarise(
+    altitude = mean(altitude, na.rm = TRUE),
+    slope    = mean(slope, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+# -----------------------------------------------------------------------------
+# 3. X- und Y-Achsen erstellen
+# -----------------------------------------------------------------------------
+
+x <- sort(unique(df_3d$X))
+y <- sort(unique(df_3d$Y))
+
+
+# -----------------------------------------------------------------------------
+# 4. Matrizen erzeugen
+#
+# z_altitude = Höhe der Oberfläche
+# z_slope    = Farbe der Oberfläche
+# -----------------------------------------------------------------------------
+
+z_altitude <- matrix(
+  NA_real_,
+  nrow = length(y),
+  ncol = length(x)
+)
+
+z_slope <- matrix(
+  NA_real_,
+  nrow = length(y),
+  ncol = length(x)
+)
+
+
+# Position jedes Datenpunkts in der Matrix bestimmen
+ix <- match(df_3d$X, x)
+iy <- match(df_3d$Y, y)
+
+
+# Werte in die Matrizen schreiben
+z_altitude[cbind(iy, ix)] <- df_3d$altitude
+z_slope[cbind(iy, ix)] <- df_3d$slope
+
+
+# -----------------------------------------------------------------------------
+# 5. Deine vorhandene Farbpalette
+# -----------------------------------------------------------------------------
+
+colours <- c(
+  "#3C0217",
+  "#550C26",
+  "#6B1631",
+  "#84203E",
+  "#9B294C",
+  "#AA4C4D",
+  "#B76D4C",
+  "#BB8553",
+  "#BA9860",
+  "#BEA875",
+  "#A8A57C",
+  "#859783",
+  "#618886",
+  "#417C8B",
+  "#287390",
+  "#276587",
+  "#285A7E",
+  "#254E75",
+  "#26426E",
+  "#2F4774",
+  "#415B85",
+  "#88A2CA",
+  "#91AED3",
+  "#C4D3EC",
+  "#DCE8F7"
+) |> rev()
+
+
+# -----------------------------------------------------------------------------
+# 6. Plotly-Colorscale erzeugen
+# -----------------------------------------------------------------------------
+
+colorscale <- Map(
+  function(pos, col) {
+    list(pos, col)
+  },
+  seq(0, 1, length.out = length(colours)),
+  colours
+)
+
+
+# -----------------------------------------------------------------------------
+# 7. 3D-Plot
+# -----------------------------------------------------------------------------
+
+p3d <- plot_ly(
+  x = x,
+  y = y,
+  z = z_altitude,
+  
+  # Farbe unabhängig von z:
+  surfacecolor = z_slope,
+  
+  type = "surface",
+  
+  colorscale = colorscale,
+  
+  colorbar = list(
+    title = "Temperature slope"
+  ),
+  
+  hovertemplate = paste(
+    "X: %{x}<br>",
+    "Y: %{y}<br>",
+    "Altitude: %{z:.0f} m<br>",
+    "Slope: %{surfacecolor:.4f}<br>",
+    "<extra></extra>"
+  )
+) |>
+  layout(
+    scene = list(
+      
+      xaxis = list(
+        title = "X"
+      ),
+      
+      yaxis = list(
+        title = "Y"
+      ),
+      
+      zaxis = list(
+        title = "Altitude [m]"
+      ),
+      
+      aspectmode = "manual",
+      aspectratio = list(
+        x = 2,
+        y = 1,
+        z = .1
+      )
+    ),
+    
+    margin = list(
+      l = 0,
+      r = 0,
+      b = 0,
+      t = 30
+    )
+  )
+
+
+# -----------------------------------------------------------------------------
+# 8. Shiny UI
+# -----------------------------------------------------------------------------
+
+ui1 <- fluidPage(
+  
+  titlePanel("Austria Temperature Trends"),
+  
+  plotlyOutput(
+    "plot3d",
+    width = "100%",
+    height = "90vh"
+  )
+  
+)
+
+
+# -----------------------------------------------------------------------------
+# 9. Shiny Server
+# -----------------------------------------------------------------------------
+
+server1 <- function(input, output, session) {
+  
+  output$plot3d <- renderPlotly({
+    p3d
+  })
+  
+}
+
+
+# -----------------------------------------------------------------------------
+# 10. App starten
+# -----------------------------------------------------------------------------
+
+shinyApp(
+  ui = ui1,
+  server = server1
+)
+
+
+
