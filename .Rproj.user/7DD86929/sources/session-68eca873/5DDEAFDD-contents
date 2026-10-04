@@ -68,7 +68,7 @@ if (file.exists("metadata_km.json")) {
   metadata_grid <- fromJSON("metadata_km.json")
 } else {
   metadata_grid <- fromJSON("https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v3-1m-1km/metadata")
-  write_json(metadata_km,"metadata_km.json")
+  write_json(metadata_grid,"metadata_km.json")
 }
 
 
@@ -746,45 +746,45 @@ server <- function(input, output, session) {
     df_grid<-df_grid |> mutate(dataset = map2(dataset,Date, \(dataset,Date ) dataset|>mutate(year = year(Date))))
     dat <- df_grid$dataset[[1]]
     
-    # df_elevation <- read_rds("df_elevation.rds")|> st_as_sf(
-    #   coords = c("lon", "lat"),
-    #   crs = 4326,
-    #   remove = FALSE
-    # )|> st_transform(3416)
-    # 
-    # df_elevation <- bind_cols(st_drop_geometry(df_elevation),as_tibble(st_coordinates(df_elevation)))
-    # 
-    
-    # df_grid <- df_grid$dataset |> map(function(dat){
-    #   
-    #   dat$TM <- as.numeric(
-    #     stri_match_first_regex(
-    #       dat$parameters,
-    #       '"TM"\\s*:\\s*\\{.*?"data"\\s*:\\s*\\[\\s*(-?[0-9.]+)'
-    #     )[, 2]
-    #   )
-    #   
-    #   
-    #   
-    #   sf_geo <- dat |> st_transform(3416)
-    #   sf_geo <- bind_cols(st_drop_geometry(sf_geo),as_tibble(st_coordinates(sf_geo)))|> 
-    #     select(-parameters)
-    #   
-    # })|> bind_rows()
-    # 
-    # 
-    # 
-    # df_grid|> group_by(X,Y)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|> ggplot(aes(X,Y, fill = amount_na))+geom_tile(width = 1000, height = 1000)+coord_equal()
-    # df_grid|> group_by(year)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|>ggplot(aes(year, amount_na))+geom_point()+geom_line()
-    # 
-    # 
-    # df_grid<-df_grid |> left_join(df_elevation, by = c("X","Y"))
-    #slopes<- df_grid|> drop_na()|> group_by(X,Y)|> summarise(slope = coef(lm(TM~year, data = pick(everything())))[2], .groups = "drop")
-    
-    
-    #saveRDS(slopes,"slopes.rds")
-    #saveRDS(df_elevation,"df_elevation.rds")
-    
+    df_elevation <- read_rds("df_elevation.rds")|> st_as_sf(
+      coords = c("lon", "lat"),
+      crs = 4326,
+      remove = FALSE
+    )|> st_transform(3416)
+
+    df_elevation <- bind_cols(st_drop_geometry(df_elevation),as_tibble(st_coordinates(df_elevation)))
+
+
+    df_grid <- df_grid$dataset |> map(function(dat){
+
+      dat$TM <- as.numeric(
+        stri_match_first_regex(
+          dat$parameters,
+          '"TM"\\s*:\\s*\\{.*?"data"\\s*:\\s*\\[\\s*(-?[0-9.]+)'
+        )[, 2]
+      )
+
+
+
+      sf_geo <- dat |> st_transform(3416)
+      sf_geo <- bind_cols(st_drop_geometry(sf_geo),as_tibble(st_coordinates(sf_geo)))|>
+        select(-parameters)
+
+    })|> bind_rows()
+
+
+
+    df_grid|> group_by(X,Y)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|> ggplot(aes(X,Y, fill = amount_na))+geom_tile(width = 1000, height = 1000)+coord_equal()
+    df_grid|> group_by(year)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|>ggplot(aes(year, amount_na))+geom_point()+geom_line()
+
+
+    df_grid<-df_grid |> left_join(df_elevation, by = c("X","Y"))
+    slopes<- df_grid|> drop_na()|> group_by(X,Y)|> summarise(slope = coef(lm(TM~year, data = pick(everything())))[2], .groups = "drop")
+
+
+    saveRDS(slopes,"slopes.rds")
+    saveRDS(df_elevation,"df_elevation.rds")
+
     
     slopes<-read_rds("slopes.rds")
     
