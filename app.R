@@ -15,8 +15,8 @@ if (!require(rsconnect)) {install.packages("rsconnect"); library(rsconnect)}
 if (!require(stringi)) {install.packages("stringi"); library(stringi)}
 if (!require(sf)) {install.packages("sf"); library(sf)}
 if (!require(patchwork)) {install.packages("patchwork"); library(patchwork)}
-
-
+if (!require(terra)) {install.packages("terra"); library(terra)}
+if (!require(mgcv)) {install.packages("mgcv"); library(mgcv)}
 
 
 # metadata_10min <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-10min/metadata")
@@ -24,16 +24,6 @@ if (!require(patchwork)) {install.packages("patchwork"); library(patchwork)}
 # metadata_daily <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d/metadata")
 # metadata_monthly <- fromJSON("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1m/metadata")
 # metadata_km <- fromJSON("https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v3-1m-1km/metadata")
-
-
-
-# 
-# 
-# 
-# 
-#
-
-
 
 
 if (file.exists("metadata_10min.json")) {
@@ -79,26 +69,6 @@ avail_stations<- rbind(metadata_10min$stations|>mutate(origin = "10min"),metadat
   group_by(name)|> summarise(amount = n_distinct(origin))|> filter(amount>3)|>select(name)|> unlist()|>array()|>sort()
 
 
-## custom functions for workaround of shiny because it cant load terra or raster
-#' Return the xmin value from a bounding-box data frame
-xmin <- function(df, row = 1) {
-  df[row, "xmin"][[1]]
-}
-
-#' Return the xmax value from a bounding-box data frame
-xmax <- function(df, row = 1) {
-  df[row, "xmax"][[1]]
-}
-
-#' Return the ymin value from a bounding-box data frame
-ymin <- function(df, row = 1) {
-  df[row, "ymin"][[1]]
-}
-
-#' Return the ymax value from a bounding-box data frame
-ymax <- function(df, row = 1) {
-  df[row, "ymax"][[1]]
-}
 
 ui <- navbarPage(
   title = "GeoVis",
@@ -107,34 +77,31 @@ ui <- navbarPage(
     bg = "white",
     underline = T),
   nav_panel("Current",
-            navset_tab(
-              nav_panel("Aktuell",
-                        plotlyOutput(outputId = "plot_aktuell"),
-                        selectInput(inputId = "location",
-                                    label = "Location",
-                                    choices = c("ÖSTERREICH", avail_stations|> sort()),
-                                    selected = "Salzburg Freisaal"
-                        ),
-                        selectInput(inputId  = "variables_hourly",
-                                    label = "Variables",
-                                    choices = metadata_hourly$parameters |> dplyr::pull(long_name)|> sort(),
-                                    selected = "Lufttemperatur 2m"
-                        )
-              )
-            ),
-            nav_panel("History",
-                      selectInput("switch", "Switch Visualisation", choices = c("Tiles","Smooth")),
-                      selectInput("start_date_history", "Start Date", selected = 2000, choices = seq(1900, year(Sys.Date()))),
-                      plotlyOutput(outputId = "plot_history"),
-                      selectInput(inputId  = "variables_daily",
-                                  label = "Variables",
-                                  choices = metadata_daily$parameters |> dplyr::pull(long_name)|> sort(),
-                                  selected = "Lufttemperatur 2m Mittelwert"),
-                      tableOutput(outputId = "table"),
-                      textOutput("text")
-                      
-                      
-            )
+            
+              
+              plotlyOutput(outputId = "plot_aktuell"),
+              selectInput(inputId = "location",
+                          label = "Location",
+                          choices = c("ÖSTERREICH", avail_stations|> sort()),
+                          selected = "Salzburg Freisaal"
+              ),
+              selectInput(inputId  = "variables_hourly",
+                          label = "Variables",
+                          choices = metadata_hourly$parameters |> dplyr::pull(long_name)|> sort(),
+                          selected = "Lufttemperatur 2m"
+              ),
+              
+            
+            
+            selectInput("switch", "Switch Visualisation", choices = c("Tiles","Smooth")),
+            plotlyOutput(outputId = "plot_history"),
+            selectInput(inputId  = "variables_daily",
+                        label = "Variables",
+                        choices = metadata_daily$parameters |> dplyr::pull(long_name)|> sort(),
+                        selected = "Lufttemperatur 2m Mittelwert"),
+
+            
+            
   ),
   tabPanel("Trends",
            nav_panel("Task 2",
@@ -175,51 +142,20 @@ ui <- navbarPage(
   ),
   tabPanel("Slopes",
            navset_tab(
-             
-             nav_panel("Missing Data",
-                       
-                       
-                       selectInput(inputId  = "sort_missing_by_variable",
-                                   label = "Sort by",
-                                   choices = c("nonNacount","altitude","name","time_range_years"),
-                                   selected = "time_range_years"
-                       ),
-                       plotlyOutput("plot_missing",height = "75vh",width ="90vw") 
+             nav_panel("500m",
+                       textOutput("slope_stats"),
+                       plotOutput("plot_per_500m",width = "100%",height = "80vh")
              ),
-             
-             nav_panel("Slopes",
-                       div({ plotlyOutput("plot_slopes",height = "75vh",width ="90vw") })
+             nav_panel("Altitude Relation",
+                       plotOutput("plot_altitude_slope",width = "100%",height = "80vh")
              ),
-             
-             nav_panel("Slopes Comparison",
-                       fluidRow(
-                         column(
-                           width = 3,
-                           sliderInput("time_multiplyer", "Time:", min = 1, max = 10, value = 1),
-                           checkboxInput("weighted_switch", label = "Weighted", value = FALSE)
-                         ),
-                         column(
-                           width = 9,
-                           plotlyOutput("plot_lin_reg", height = "75vh",width ="90vw")
-                         )
-                       )
+             nav_panel("Nonlinear Effect",
+                       textOutput("slope_findings"),
+                       plotOutput("plot_altitude_gam",width = "100%",height = "80vh")
              ),
-             nav_panel("Slopes LinReg",     
-                       checkboxInput("weighted_switch2", label = "Weighted", value = FALSE),
-                       fluidRow({ plotlyOutput("slope_wsmooth",height = "75vh",width ="90vw") })
-             )
-           )
-  ),
-  tabPanel("Seasons",
-           navset_tab(
-             nav_panel("Jahreszeiten",
-                       div({ plotlyOutput("plot_wiso",height = "75vh",width ="90vw") })
-             ),
-             nav_panel("Seasonal Slopes",
-                       div({ plotlyOutput("seasonal_slopes",height = "75vh", width ="90vw" ) })
-             ),
-             nav_panel("Seasonal Slopes Weighted",
-                       div({ plotlyOutput("seasonal_slopes_weighted",height = "75vh", width ="90vw") })
+             nav_panel("Spatial Influence",
+                       plotOutput("plot_altitude_effect",width = "100%",height = "45vh"),
+                       plotOutput("plot_residual_map",width = "100%",height = "75vh")
              )
            )
   ),
@@ -227,6 +163,223 @@ ui <- navbarPage(
            plotlyOutput("plot3d",width = "100%",height = "90vh")
   )
 )
+
+if (file.exists("slopes.rds")) {
+  
+  message("Loading slopes.rds...")
+  slopes <- readRDS("slopes.rds")
+  message("slopes.rds loaded.")
+  
+} else {
+  
+  bbox <- paste(metadata_grid$bbox_outer, collapse = ",")
+  
+  link_grid <- "https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v3-1m-1km"
+  
+  date0 <- seq(
+    as.Date(metadata_grid$start_time),
+    as.Date(metadata_grid$end_time),
+    by = "1 month"
+  )
+  
+  links <- paste0(
+    link_grid,
+    "?parameters=TM",
+    "&start=", format(date0, "%Y-%m-%dT00:00"),
+    "&end=", format(date0, "%Y-%m-%dT00:00"),
+    "&bbox=", bbox,
+    "&output_format=netcdf"
+  )
+  
+  
+  message("Calculating monthly slopes...")
+  
+  pb <- txtProgressBar(
+    min = 0,
+    max = length(links),
+    style = 3
+  )
+  
+  grid <- NULL
+  
+  n <- NULL
+  sum_month <- NULL
+  sum_TM <- NULL
+  sum_month2 <- NULL
+  sum_month_TM <- NULL
+  
+  
+  for (i in seq_along(links)) {
+    
+    month_index <- (
+      lubridate::year(date0[i]) -
+        lubridate::year(date0[1])
+    ) * 12 +
+      lubridate::month(date0[i]) -
+      lubridate::month(date0[1])
+    
+    
+    message(
+      "\nLoading ",
+      format(date0[i], "%Y-%m"),
+      "..."
+    )
+    
+    
+    tmp <- tempfile(fileext = ".nc")
+    
+    download.file(
+      links[i],
+      tmp,
+      mode = "wb",
+      quiet = TRUE
+    )
+    
+    r <- terra::rast(tmp)
+    
+    
+    if (terra::nlyr(r) > 1) {
+      r <- r[[1]]
+    }
+    
+    
+    TM <- terra::values(
+      r,
+      mat = FALSE
+    )
+    
+    
+    if (is.null(grid)) {
+      
+      coords <- terra::xyFromCell(
+        r,
+        seq_len(terra::ncell(r))
+      )
+      
+      grid <- tibble(
+        X = coords[, 1],
+        Y = coords[, 2]
+      )
+      
+      n_cells <- nrow(grid)
+      
+      n <- integer(n_cells)
+      sum_month <- numeric(n_cells)
+      sum_TM <- numeric(n_cells)
+      sum_month2 <- numeric(n_cells)
+      sum_month_TM <- numeric(n_cells)
+    }
+    
+    
+    if (length(TM) != nrow(grid)) {
+      stop(
+        paste(
+          "Grid size changed in",
+          format(date0[i], "%Y-%m")
+        )
+      )
+    }
+    
+    
+    valid <- is.finite(TM)
+    
+    
+    n[valid] <-
+      n[valid] + 1
+    
+    sum_month[valid] <-
+      sum_month[valid] + month_index
+    
+    sum_TM[valid] <-
+      sum_TM[valid] + TM[valid]
+    
+    sum_month2[valid] <-
+      sum_month2[valid] + month_index^2
+    
+    sum_month_TM[valid] <-
+      sum_month_TM[valid] + month_index * TM[valid]
+    
+    
+    rm(r, TM)
+    unlink(tmp)
+    gc()
+    
+    
+    setTxtProgressBar(pb, i)
+  }
+  
+  
+  close(pb)
+  
+  
+  message("\nCalculating final monthly slopes...")
+  
+  
+  denominator <-
+    n * sum_month2 -
+    sum_month^2
+  
+  
+  slope <- rep(
+    NA_real_,
+    length(n)
+  )
+  
+  
+  valid_slope <-
+    n >= 2 &
+    denominator != 0
+  
+  
+  slope[valid_slope] <- (
+    n[valid_slope] *
+      sum_month_TM[valid_slope] -
+      sum_month[valid_slope] *
+      sum_TM[valid_slope]
+  ) /
+    denominator[valid_slope]
+  
+  
+  slopes <- grid |>
+    mutate(
+      slope = slope
+    ) |>
+    filter(
+      is.finite(slope)
+    ) |>
+    select(
+      X,
+      Y,
+      slope
+    )
+  
+  
+  saveRDS(
+    slopes,
+    "slopes.rds"
+  )
+  
+  
+  rm(
+    grid,
+    n,
+    sum_month,
+    sum_TM,
+    sum_month2,
+    sum_month_TM,
+    denominator,
+    slope,
+    valid_slope
+  )
+  
+  gc()
+  
+  message("slopes.rds saved.")
+}
+
+
+
+
 
 server <- function(input, output, session) {
   busyIndicatorOptions(spinner_type = "dots")
@@ -301,13 +454,6 @@ server <- function(input, output, session) {
   
   
   
-  output$table <- renderTable({
-    head(hour_data()$df_hour |> mutate(time = format(time, "%d-%m-%Y %H:%M")) |> 
-           dplyr::select(c(time, var)) |> rename("date" = time) |> 
-           arrange(-var))
-  })
-  
-  output$text <- renderText({ metadata_hourly$parameters|> filter(name== hour_data()$varsRaw)|> select(long_name)|> unlist()|>array() })
   
   
   daily_data <- reactive({
@@ -345,7 +491,7 @@ server <- function(input, output, session) {
         ggplotly(
           daily_data() |>mutate(is_currentyear= ifelse(year==year(Sys.time()),year(Sys.time()),paste(min(year),max(year),sep ="-")))|> 
             filter(is.finite(var)) |> 
-            ggplot(aes(x = yearday, y = var, colour = factor(year))) +
+            ggplot(aes(x = yearday, y = var, colour = factor(year),group = year), size = .2) +
             scale_colour_manual(values = c("grey","red"))+
             geom_line(aes(col=is_currentyear ),method = "loess", se = FALSE, na.rm = TRUE) + 
             #labs(x = "Yearday", y = input$variables_daily, color = "Year") +
@@ -492,359 +638,204 @@ server <- function(input, output, session) {
                theme_bw())
   })
   
-  slope_data <- reactive({
-    varsRaw <- c("tl_mittel")
-    vars <- paste0("parameters=", varsRaw, collapse = "&")
-    
-    locations <- metadata_monthly$stations |> filter(type == "COMBINED") |> pull(id)
-    location_server_2 <- paste0("station_ids=", locations, collapse = "&")
-    
-    
-    if (file.exists("df1.rds")) {
-      df1<-read_rds("df1.rds")
-      start_date <- df1$time|> max(na.rm= T)|>as.Date()
-      link <- paste0("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1m?", vars, "&start=", start_date, "&end=", Sys.Date() - days(1), "&", location_server_2, "&output_format=csv")
-      df1<- df1|>rbind(read_csv(link))
-      saveRDS(df1,"df1.rds")
-      
-    } else {
-      start_date <- "1900-01-01"
-      end_date <- Sys.Date() - days(1)
-      link <- paste0("https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1m?", vars, "&start=", start_date, "&end=", Sys.Date() - days(1), "&", location_server_2, "&output_format=csv")
-      df1<- read_csv(link)
-    }
-    
-    
-    df <- df1
-    df <- df |> rename("id" = station) 
-    df <- left_join(df, metadata_monthly$stations |> filter(is_active == "TRUE" & type == "COMBINED"))
-    names(df)[3] <- "var"
-    mean_var <- mean(df$var, na.rm = TRUE)
-    
-    df <- df |> mutate(datetime = as.POSIXct(time, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-                       date = date(time), 
-                       year = year(date),
-                       month = month(date),
-                       yearday = yday(date),
-                       day = day(date),
-                       hour = hour(datetime))
-    
-    df <- df |> arrange(altitude) |>
-      mutate(ordered_name = factor(paste(name, altitude), levels = unique(paste(name, altitude))))
-    
-    
-    
-    #x|> select( var, time_numeric,id)|> filter(id >200)|>distinct()|> ggplot(aes(time_numeric, var))+geom_point()+ facet_grid( id~. ) 
-    
-    get_coefficians <- function(x) {
-      x <- x |> mutate(min_time = x |> filter(!is.na(var)) |> pull(time) |> min(),
-                       time_numeric = as.numeric(difftime(time, min_time, units = "days")) / 365.25)
-      coef(summary(lm(var ~ time_numeric, data = drop_na(x, var))))
-    }
-    
-    
-    get_slope <- function(x) {
-      get_coefficians(x)["time_numeric","Estimate"]
-    }
-    
-    get_intercept <- function(x) {
-      get_coefficians(x)["(Intercept)","Estimate"]
-    }
-    
-    get_standard_error <- function(x) {
-      get_coefficians(x)["time_numeric","Std. Error"]
-    }
-    
-    
-    
-    
-    
-    non_na_count <- df |> group_by(id) |> reframe(nonNacount = sum(!is.na(var))) |> as.data.frame()
-    
-    df_first_non_na <- df |> 
-      filter(!is.na(var)) |>              
-      group_by(id) |>                          
-      reframe(first_date = min(time,ma.rm= T), last_date = max(time,na.rm= T)) |>     
-      ungroup()
-    
-    df <- left_join(df, non_na_count)
-    df <- left_join(df, df_first_non_na)
-    
-    max_time_range <- df |> 
-      group_by(id) |> 
-      reframe(time_range_years = as.double((max(time,na.rm=T) - first_date) / 365)) |> 
-      pull(time_range_years) |> 
-      max(na.rm = TRUE)
-    
-    timesteps <- n_distinct(df$time)[1]
-    #old weight : (nonNacount / timesteps)
-    df_linreg <- df |> group_by(id) |> reframe(
-      time_range_months = as.double((max(time,na.rm= T) - first_date) / 12),
-      time_range_years = as.double((max(time,na.rm= T)  - first_date) / 365),
-      slope = as.double(get_slope(pick(everything()))),
-      weight = 1/(get_standard_error(pick(everything()))^2),
-      weight2 = (1/(get_standard_error(pick(everything()))^2))*(time_range_years/max_time_range) * (nonNacount/max(non_na_count$nonNacount)),
-      slope_weighted = slope * weight2
-    ) |> unique()
-    
-    df_linreg <- left_join(df, df_linreg)
-    
-    
-    list(df = df, df_linreg = df_linreg, df1 = df1, get_slope = get_slope, get_standard_error = get_standard_error, max_time_range = max_time_range, non_na_count = non_na_count)
-  })
-  
-  output$plot_slopes <- renderPlotly({
-    ggplotly(slope_data()$df |> ggplot(aes(x = time, y = (altitude + var), colour = ordered_name)) +
-               geom_smooth(method = "lm", se = FALSE, na.rm = TRUE))
-  })
-  
-  
-  
   
   output$plot_missing <- renderPlotly({
-    ggplotly(slope_data()$df_linreg |>distinct()|> mutate(name = reorder(name, .data[[input$sort_missing_by_variable]])) |> ggplot()+ 
+    ggplotly(df_daily |>distinct()|> mutate(name = reorder(name, .data[[input$sort_missing_by_variable]])) |> ggplot()+ 
                geom_tile(aes(x= time, y= name , fill = var))+
                scale_fill_gradientn(colors = hcl.colors(20, "ag_Sunset")))
   })
   
   
-  
-  output$plot_lin_reg <- renderPlotly({
-    if (!input$weighted_switch) {
-      slope_data()$df_linreg |> dplyr::select(altitude, name, slope) |> unique() |>
-        plot_ly(x = ~altitude, y = ~slope * input$time_multiplyer, text = ~name, hovertext = ~name, hoverinfo = ~name, type = "bar", marker = list(color = "orange")) |>
-        layout(title = paste0("Change per ",input$time_multiplyer,"-Years in °C"))
-    } else {        
-      slope_data()$df_linreg |> dplyr::select(altitude, name, slope_weighted) |> unique() |>
-        plot_ly(x = ~altitude, y = ~slope_weighted * input$time_multiplyer, text = ~name, hovertext = ~name, hoverinfo = ~name, type = "bar", marker = list(color = "orange")) |>
-        layout(title = paste0("Change per ",input$time_multiplyer,"-Years in °C"))
-    }
-  })
-  
-  output$slope_wsmooth <- renderPlotly({
-    slope_col <- if (!input$weighted_switch2) "slope" else "slope_weighted"
-    ggplotly(slope_data()$df_linreg |> dplyr::select(altitude, name, slope, slope_weighted) |> unique() |>
-               ggplot(aes(x = altitude, y = .data[[slope_col]])) +
-               geom_col(colour = "orange") +
-               geom_smooth(method = "lm", se = FALSE, na.rm = TRUE))
-  })
-  
-  season_data <- reactive({
-    df_wiso <- slope_data()$df1
-    df_wiso <- df_wiso |> rename("id" = station)
-    df_wiso <- left_join(df_wiso, metadata_monthly$stations |> filter(is_active == "TRUE" & type == "COMBINED"))
-    names(df_wiso)[3] <- "var"
-    
-    df_wiso <- df_wiso |> mutate(datetime = as.POSIXct(time, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-                                 date = date(time), 
-                                 year = year(date),
-                                 month = month(date),
-                                 yearday = yday(date),
-                                 day = day(date),
-                                 hour = hour(datetime))
-    
-    df_wiso <- df_wiso |> filter(!is.na(var)) |>
-      mutate(season = case_when(month %in% c(12, 1, 2)  ~ "winter",
-                                month %in% 3:5          ~ "spring",
-                                month %in% 6:8          ~ "summer",
-                                month %in% 9:11         ~ "fall"))
-    
-    
-    df_wiso
-  })
-  
-  output$plot_wiso <- renderPlotly({
-    season_data() |> dplyr::select(time, var, id, season) |> unique() |>
-      ggplot(aes(x = time, y = var, col = season)) +
-      geom_line() +
-      facet_wrap(~season) + theme_dark()
-  })
-  
-  season_slope_data <- reactive({
-    df_wiso <- season_data()
-    non_na_count_wiso <- df_wiso |> group_by(id, season) |> reframe(nonNacount = sum(!is.na(var))) |> as.data.frame()
-    df_first_non_na_wiso <- df_wiso |> 
-      filter(!is.na(var)) |>              
-      group_by(id, season) |>                          
-      reframe(first_date = min(time)) |>     
-      ungroup()
-    
-    df_wiso <- left_join(df_wiso, non_na_count_wiso)
-    df_wiso <- left_join(df_wiso, df_first_non_na_wiso)
-    
-    timesteps_wiso <- n_distinct(slope_data()$df_linreg$time)[1]
-    # old weight = (nonNacount / timesteps_wiso) * 12
-    
-    
-    df_linreg_wiso <- df_wiso |> group_by(season, id) |> reframe(
-      time_range_months = as.double((max(time) - first_date) / 12),
-      time_range_years = as.double((max(time) - first_date) / 365),
-      slope = as.double(slope_data()$get_slope(pick(everything()))),
-      weight = 1/(slope_data()$get_standard_error(pick(everything()))^2),
-      weight2 = (1/(slope_data()$get_standard_error(pick(everything()))^2))*(time_range_years/slope_data()$max_time_range) * (nonNacount/max(slope_data()$non_na_count$nonNacount)),
-      slope_weighted = slope * weight2
-    ) |> unique()
-    
-    df_linreg_wiso <- left_join(df_wiso, df_linreg_wiso)
-    
-    
-    df_linreg_wiso
-  })
-  
-  output$seasonal_slopes <- renderPlotly({
-    ggplotly(season_slope_data() |> dplyr::select(altitude, name, slope, season) |> unique() |>
-               ggplot(aes(x = altitude, y = slope, colour = season)) +
-               geom_col() +
-               geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 0.2, na.rm = TRUE) +
-               facet_wrap(~season) +
-               theme_dark())
-  })
-  
-  output$seasonal_slopes_weighted <- renderPlotly({
-    ggplotly(season_slope_data() |> dplyr::select(altitude, name, slope_weighted, season) |> unique() |>
-               ggplot(aes(x = altitude, y = slope_weighted, colour = season)) +
-               geom_col() +
-               geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 0.2, na.rm = TRUE) +
-               facet_wrap(~season) +
-               theme_dark())
-  })
-  
-  
   three_data <- reactive({
-    bbox <- paste(metadata_grid$bbox_outer, collapse = ",")
-    
-    
-    
-    link_grid <- "https://dataset.api.hub.geosphere.at/v1/grid/historical/spartacus-v2-1y-1km"
-    
-    
-    
-    df_grid<- if (!file.exists("historical_grid_data.rds")) {
-      date0 <- seq(as.Date(metadata_grid$start_time), as.Date(metadata_grid$end_time), by = "1 year")
-      
-      
-      df <- tibble(Date = date0, link = link_grid)|> mutate(link = paste0(link,
-                                                                          "?parameters=TM&start=", format(date0, "%Y-%m-%dT00:00"),
-                                                                          "&end=",   format(date0, "%Y-%m-%dT00:00") ,
-                                                                          "&bbox=", bbox,
-                                                                          "&output_format=geojson"))
-      datasets <- purrr::map(df$link, sf::read_sf)
-      df$dataset <- I(datasets) #just for loading
-      
-      
-      saveRDS(df, "historical_grid_data.rds") #just for loading
-    } else {
-      readRDS("historical_grid_data.rds")
-    }
-    
-    
-    
-    
-    
-    
-    
-    df_grid<-df_grid |> mutate(dataset = map2(dataset,Date, \(dataset,Date ) dataset|>mutate(year = year(Date))))
-    dat <- df_grid$dataset[[1]]
-    
-    df_elevation <- read_rds("df_elevation.rds")|> st_as_sf(
-      coords = c("lon", "lat"),
-      crs = 4326,
-      remove = FALSE
-    )|> st_transform(3416)
-
-    df_elevation <- bind_cols(st_drop_geometry(df_elevation),as_tibble(st_coordinates(df_elevation)))
-
-
-    df_grid <- df_grid$dataset |> map(function(dat){
-
-      dat$TM <- as.numeric(
-        stri_match_first_regex(
-          dat$parameters,
-          '"TM"\\s*:\\s*\\{.*?"data"\\s*:\\s*\\[\\s*(-?[0-9.]+)'
-        )[, 2]
-      )
-
-
-
-      sf_geo <- dat |> st_transform(3416)
-      sf_geo <- bind_cols(st_drop_geometry(sf_geo),as_tibble(st_coordinates(sf_geo)))|>
-        select(-parameters)
-
-    })|> bind_rows()
-
-
-
-    df_grid|> group_by(X,Y)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|> ggplot(aes(X,Y, fill = amount_na))+geom_tile(width = 1000, height = 1000)+coord_equal()
-    df_grid|> group_by(year)|> summarise(amount_na = sum(is.na(TM)),.groups = "drop")|>ggplot(aes(year, amount_na))+geom_point()+geom_line()
-
-
-    df_grid<-df_grid |> left_join(df_elevation, by = c("X","Y"))
-    slopes<- df_grid|> drop_na()|> group_by(X,Y)|> summarise(slope = coef(lm(TM~year, data = pick(everything())))[2], .groups = "drop")
-
-
-    saveRDS(slopes,"slopes.rds")
-    saveRDS(df_elevation,"df_elevation.rds")
-
-    
-    slopes<-read_rds("slopes.rds")
-    
-    slopes <- slopes |>
+    df_elevation <- read_rds("df_elevation.rds") |>
       mutate(
         X = round((X - 500) / 1000) * 1000 + 500,
         Y = round((Y - 500) / 1000) * 1000 + 500
       )
-    df_elevation<-read_rds("df_elevation.rds")
-    
-    df_elevation<-df_elevation|>
-      mutate(
-        X = round((X - 500) / 1000) * 1000 + 500,
-        Y = round((Y - 500) / 1000) * 1000 + 500
-      )
-    
     
     
     df_3d <- slopes |>
+      mutate(
+        X = round((X - 500) / 1000) * 1000 + 500,
+        Y = round((Y - 500) / 1000) * 1000 + 500
+      ) |>
       select(X, Y, slope) |>
       left_join(
         df_elevation |>
           select(X, Y, altitude),
         by = c("X", "Y")
       ) |>
-      drop_na(slope, altitude)
-    
-    
-    # -----------------------------------------------------------------------------
-    # 2. Koordinaten auf das 1-km-Raster zurücksetzen
-    #    Falls deine Rasterzentren bei ...500 liegen
-    # -----------------------------------------------------------------------------
-    
-    df_3d <- df_3d |>
-      mutate(
-        X = round((X - 500) / 1000) * 1000 + 500,
-        Y = round((Y - 500) / 1000) * 1000 + 500
-      ) |>
+      drop_na(slope, altitude) |>
       group_by(X, Y) |>
       summarise(
         altitude = mean(altitude, na.rm = TRUE),
-        slope    = mean(slope, na.rm = TRUE),
+        slope = mean(slope, na.rm = TRUE),
         .groups = "drop"
       )
     
     
-    # -----------------------------------------------------------------------------
-    # 3. X- und Y-Achsen erstellen
-    # -----------------------------------------------------------------------------
+    model1 <- lm(slope ~ altitude, data = df_3d)
+    model2 <- lm(slope ~ altitude + X + Y, data = df_3d)
+    
+    model_spatial <- mgcv::bam(
+      slope ~ s(altitude, k = 10) + s(X, Y, k = 30),
+      data = df_3d,
+      method = "fREML",
+      discrete = TRUE
+    )
+    
+    
+    covariance <- cov(df_3d$altitude, df_3d$slope, use = "complete.obs")
+    correlation <- cor(df_3d$altitude, df_3d$slope, use = "complete.obs")
+    
+    effect_raw <- coef(model1)["altitude"] * 1000
+    effect_spatial <- coef(model2)["altitude"] * 1000
+    
+    reduction <- (1 - abs(effect_spatial / effect_raw)) * 100
+    
+    
+    slope_stats <- paste0(
+      "Covariance: ", round(covariance, 4),
+      " | Correlation: ", round(correlation, 3),
+      " | R² Altitude: ", round(summary(model1)$r.squared, 3),
+      " | R² Altitude + X/Y: ", round(summary(model2)$r.squared, 3),
+      " | GAM explained deviance: ", round(summary(model_spatial)$dev.expl * 100, 1), "%"
+    )
+    
+    slope_findings <- paste0(
+      "The raw altitude effect is ", round(effect_raw, 5),
+      " °C/year per 1000m. After controlling for X and Y it is ",
+      round(effect_spatial, 5), " °C/year per 1000m, a reduction of ",
+      round(reduction, 1), "%. The GAM shows that the remaining altitude relationship is nonlinear."
+    )
+    
+    
+    df_3d <- df_3d |>
+      mutate(
+        residual_altitude = residuals(model1)
+      )
+    
+    
+    altitude_pred <- tibble(
+      altitude = seq(
+        min(df_3d$altitude),
+        max(df_3d$altitude),
+        length.out = 300
+      ),
+      X = median(df_3d$X),
+      Y = median(df_3d$Y)
+    )
+    
+    pred <- predict(
+      model_spatial,
+      newdata = altitude_pred,
+      type = "terms",
+      terms = "s(altitude)",
+      se.fit = TRUE
+    )
+    
+    altitude_pred <- altitude_pred |>
+      mutate(
+        fit = as.numeric(pred$fit),
+        se = as.numeric(pred$se.fit),
+        lower = fit - 1.96 * se,
+        upper = fit + 1.96 * se
+      )
+    
+    
+    effect_df <- tibble(
+      model = c("Altitude only", "Altitude + X/Y"),
+      effect = c(effect_raw, effect_spatial)
+    )
+    
+    
+    plot_500m <- df_3d |>
+      mutate(
+        altitude_group = floor(altitude / 500) * 500
+      ) |>
+      group_by(altitude_group) |>
+      summarise(
+        mean_slope = mean(slope, na.rm = TRUE),
+        median_slope = median(slope, na.rm = TRUE),
+        n = n(),
+        .groups = "drop"
+      ) |>
+      ggplot(aes(altitude_group, mean_slope)) +
+      geom_line() +
+      geom_point(aes(size = n)) +
+      scale_size_continuous(name = "Raster cells") +
+      labs(
+        x = "Altitude [m]",
+        y = "Mean slope"
+      ) +
+      theme_bw()
+    
+    
+    plot_altitude_slope <- df_3d |>
+      ggplot(aes(altitude, slope)) +
+      stat_bin_2d(bins = 70) +
+      geom_smooth(
+        method = "lm",
+        se = FALSE,
+        colour = "red",
+        linewidth = .7
+      ) +
+      labs(
+        x = "Altitude [m]",
+        y = "Temperature slope",
+        fill = "Raster cells"
+      ) +
+      theme_bw()
+    
+    
+    plot_altitude_gam <- altitude_pred |>
+      ggplot(aes(altitude, fit)) +
+      geom_ribbon(
+        aes(ymin = lower, ymax = upper),
+        fill = "grey",
+        alpha = .4
+      ) +
+      geom_line() +
+      geom_hline(yintercept = 0, linetype = "dashed") +
+      labs(
+        x = "Altitude [m]",
+        y = "Partial effect on temperature slope"
+      ) +
+      theme_bw()
+    
+    
+    plot_altitude_effect <- effect_df |>
+      ggplot(aes(model, effect, fill = model)) +
+      geom_col() +
+      geom_hline(yintercept = 0) +
+      labs(
+        x = "",
+        y = "Slope effect per 1000m"
+      ) +
+      theme_bw() +
+      theme(legend.position = "none")
+    
+    
+    plot_residual_map <- df_3d |>
+      ggplot(aes(X, Y, fill = residual_altitude)) +
+      geom_tile(width = 1000, height = 1000) +
+      coord_equal() +
+      scale_fill_gradient2(
+        low = "blue",
+        mid = "white",
+        high = "red",
+        midpoint = 0
+      ) +
+      labs(
+        fill = "Residual",
+        x = "X",
+        y = "Y"
+      ) +
+      theme_bw()
+    
     
     x <- sort(unique(df_3d$X))
     y <- sort(unique(df_3d$Y))
-    
-    
-    # -----------------------------------------------------------------------------
-    # 4. Matrizen erzeugen
-    #
-    # z_altitude = Höhe der Oberfläche
-    # z_slope    = Farbe der Oberfläche
-    # -----------------------------------------------------------------------------
     
     z_altitude <- matrix(
       NA_real_,
@@ -858,20 +849,12 @@ server <- function(input, output, session) {
       ncol = length(x)
     )
     
-    
-    # Position jedes Datenpunkts in der Matrix bestimmen
     ix <- match(df_3d$X, x)
     iy <- match(df_3d$Y, y)
     
-    
-    # Werte in die Matrizen schreiben
     z_altitude[cbind(iy, ix)] <- df_3d$altitude
     z_slope[cbind(iy, ix)] <- df_3d$slope
     
-    
-    # -----------------------------------------------------------------------------
-    # 5. Deine vorhandene Farbpalette
-    # -----------------------------------------------------------------------------
     
     colours <- c(
       "#3C0217",
@@ -902,10 +885,6 @@ server <- function(input, output, session) {
     ) |> rev()
     
     
-    # -----------------------------------------------------------------------------
-    # 6. Plotly-Colorscale erzeugen
-    # -----------------------------------------------------------------------------
-    
     colorscale <- Map(
       function(pos, col) {
         list(pos, col)
@@ -915,49 +894,35 @@ server <- function(input, output, session) {
     )
     
     
-    # -----------------------------------------------------------------------------
-    # 7. 3D-Plot
-    # -----------------------------------------------------------------------------
-    
     p3d <- plot_ly(
       x = x,
       y = y,
       z = z_altitude,
-      
-      # Farbe unabhängig von z:
       surfacecolor = z_slope,
-      
       type = "surface",
-      
       colorscale = colorscale,
-      
       colorbar = list(
         title = "Temperature slope"
       ),
-      
       hovertemplate = paste(
         "X: %{x}<br>",
         "Y: %{y}<br>",
-        "Altitude: %{z:.0f} m<br>",
-        "Slope: %{surfacecolor:.4f}<br>",
+        "Altitude: %{z} m<br>",
+        "Slope: %{surfacecolor}<br>",
         "<extra></extra>"
       )
     ) |>
       layout(
         scene = list(
-          
           xaxis = list(
             title = "X"
           ),
-          
           yaxis = list(
             title = "Y"
           ),
-          
           zaxis = list(
             title = "Altitude [m]"
           ),
-          
           aspectmode = "manual",
           aspectratio = list(
             x = 2,
@@ -965,7 +930,6 @@ server <- function(input, output, session) {
             z = .1
           )
         ),
-        
         margin = list(
           l = 0,
           r = 0,
@@ -975,13 +939,52 @@ server <- function(input, output, session) {
       )
     
     
+    rm(model1, model2, model_spatial, pred)
+    gc()
     
     
-    p3d
+    list(
+      plot_500m = plot_500m,
+      plot_altitude_slope = plot_altitude_slope,
+      plot_altitude_gam = plot_altitude_gam,
+      plot_altitude_effect = plot_altitude_effect,
+      plot_residual_map = plot_residual_map,
+      slope_stats = slope_stats,
+      slope_findings = slope_findings,
+      p3d = p3d
+    )
+  })
+  
+  output$plot_per_500m <- renderPlot({
+    three_data()$plot_500m
+  })
+  
+  output$plot_altitude_slope <- renderPlot({
+    three_data()$plot_altitude_slope
+  })
+  
+  output$plot_altitude_gam <- renderPlot({
+    three_data()$plot_altitude_gam
+  })
+  
+  output$plot_altitude_effect <- renderPlot({
+    three_data()$plot_altitude_effect
+  })
+  
+  output$plot_residual_map <- renderPlot({
+    three_data()$plot_residual_map
+  })
+  
+  output$slope_stats <- renderText({
+    three_data()$slope_stats
+  })
+  
+  output$slope_findings <- renderText({
+    three_data()$slope_findings
   })
   
   output$plot3d <- renderPlotly({
-    three_data()
+    three_data()$p3d
   })
   
   
