@@ -579,7 +579,17 @@ server <- function(input, output, session) {
       surfacecolor = surf$slope,
       type = "surface",
       colorscale = colorscale,
-      colorbar = list(title = "Temperature slope [°C/year]"),
+      colorbar = list(
+        title = list(text = "Temperature slope [°C/year]", side = "top"),
+        orientation = "h",
+        x = 0.5,
+        xanchor = "center",
+        y = 1.02,
+        yanchor = "bottom",
+        len = 0.55,
+        thickness = 12,
+        tickfont = list(size = 10)
+      ),
       text = hover_text
     ) |>
       layout(
@@ -590,7 +600,12 @@ server <- function(input, output, session) {
           aspectmode = "manual",
           aspectratio = list(x = 2, y = 1, z = 0.1)
         ),
-        margin = list(l = 0, r = 0, b = 0, t = 30)
+        margin = list(l = 0, r = 0, b = 0, t = 80)
+      )|>config(
+        scrollZoom = TRUE,
+        displayModeBar = TRUE,
+        displaylogo = FALSE,
+        responsive = TRUE
       )
   })
 }
