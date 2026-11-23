@@ -92,16 +92,36 @@ station_bounds <- function(station_name) {
   if (station_name == "ÖSTERREICH") {
     candidates <- metadata_daily$stations |>
       filter(id %in% national_ids)
-    first_date <- suppressWarnings(max(as.Date(candidates$valid_from), na.rm = TRUE))
+    
+    first_date <- suppressWarnings(
+      max(as.Date(candidates$valid_from), na.rm = TRUE)
+    )
   } else {
     candidates <- metadata_daily$stations |>
-      filter(.data$name == .env$station_name)
-    first_date <- suppressWarnings(min(as.Date(candidates$valid_from), na.rm = TRUE))
+      filter(
+        .data$name == .env$station_name,
+        type == "COMBINED"
+      )
+    
+    first_date <- suppressWarnings(
+      min(as.Date(candidates$valid_from), na.rm = TRUE)
+    )
   }
-  last_date <- suppressWarnings(min(as.Date(candidates$valid_to), na.rm = TRUE))
-  if (!is.finite(as.numeric(first_date))) first_date <- as.Date("1990-01-01")
-  if (!is.finite(as.numeric(last_date))) last_date <- Sys.Date() - 1
+  
+  last_date <- suppressWarnings(
+    min(as.Date(candidates$valid_to), na.rm = TRUE)
+  )
+  
+  if (!is.finite(as.numeric(first_date))) {
+    first_date <- as.Date("1990-01-01")
+  }
+  
+  if (!is.finite(as.numeric(last_date))) {
+    last_date <- Sys.Date() - 1
+  }
+  
   last_date <- min(last_date, Sys.Date() - 1)
+  
   list(from = first_date, to = last_date)
 }
 
