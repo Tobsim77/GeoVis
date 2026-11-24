@@ -79,8 +79,18 @@ read_geo_csv <- function(url) {
 
 station_ids <- function(meta, station_name, national = FALSE) {
   if (national) return(national_ids)
-  ids <- meta$stations |> filter(.data$name == .env$station_name) |> pull(id)
-  if (length(ids) == 0L) stop("Keine Stations-ID für den ausgewählten Standort gefunden.")
+  
+  ids <- meta$stations |>
+    filter(
+      .data$name == .env$station_name,
+      type == "COMBINED"
+    ) |>
+    pull(id)
+  
+  if (length(ids) == 0L) {
+    stop("Keine kombinierte Stations-ID gefunden.")
+  }
+  
   ids[1]
 }
 
@@ -136,46 +146,42 @@ ui <- navbarPage(
     "Current",
     plotlyOutput("plot_aktuell"),
     selectInput("location", "Location",
-      choices = c("ÖSTERREICH", avail_stations),
-      selected = selected_station
+                choices = c("ÖSTERREICH", avail_stations),
+                selected = selected_station
     ),
     selectInput("variables_hourly", "Variables",
-      choices = sort(metadata_hourly$parameters$long_name),
-      selected = "Lufttemperatur 2m"
+                choices = sort(metadata_hourly$parameters$long_name),
+                selected = "Lufttemperatur 2m"
     ),
     selectInput("switch", "Switch Visualisation", choices = c("Tiles", "Smooth")),
     plotlyOutput("plot_history"),
     selectInput("variables_daily", "Variables",
-      choices = sort(metadata_daily$parameters$long_name),
-      selected = "Lufttemperatur 2m Mittelwert"
+                choices = sort(metadata_daily$parameters$long_name),
+                selected = "Lufttemperatur 2m Mittelwert"
     )
   ),
   nav_panel(
     "Trends",
-    sidebarLayout(
-      sidebarPanel(
         sliderInput("year_slider", "Years",
-          min = 1990,
-          max = lubridate::year(Sys.Date()),
-          value = c(1990, lubridate::year(Sys.Date())),
-          dragRange = TRUE,
-          sep = ""
-        )
-      ),
-      mainPanel(
+                    min = 1990,
+                    max = lubridate::year(Sys.Date()),
+                    value = c(1990, lubridate::year(Sys.Date())),
+                    dragRange = TRUE,
+                    sep = ""
+        ),
         navset_tab(
           id = "trend_subtab",
           nav_panel(
             "Trend",
             selectInput("variables2", "Variable",
-              choices = c(
-                metadata_daily$parameters |>
-                  filter(!is.na(unit), !(unit %in% c("Code (Synop)", "Code", "", "°"))) |>
-                  filter(!grepl("Beobachtungstermin", long_name)) |>
-                  pull(long_name),
-                "Gesamtschneehöhe zum Beobachtungstermin I"
-              ),
-              selected = "Lufttemperatur 2m Mittelwert"
+                        choices = c(
+                          metadata_daily$parameters |>
+                            filter(!is.na(unit), !(unit %in% c("Code (Synop)", "Code", "", "°"))) |>
+                            filter(!grepl("Beobachtungstermin", long_name)) |>
+                            pull(long_name),
+                          "Gesamtschneehöhe zum Beobachtungstermin I"
+                        ),
+                        selected = "Lufttemperatur 2m Mittelwert"
             ),
             textOutput("text2"),
             plotlyOutput("plot1")
@@ -187,8 +193,8 @@ ui <- navbarPage(
             textOutput("text_heatwave_def")
           )
         )
-      )
-    )
+      
+    
   ),
   nav_panel(
     "Slopes",
@@ -227,7 +233,7 @@ server <- function(input, output, session) {
   trend_cache <- reactiveVal(NULL)
   heat_cache <- reactiveVal(NULL)
   prepared_cache <- reactiveVal(NULL)
-
+  
   observeEvent(input$main_tab, {
     hour_cache(NULL)
     daily_cache(NULL)
@@ -236,20 +242,14 @@ server <- function(input, output, session) {
     prepared_cache(NULL)
     gc(verbose = FALSE)
   }, ignoreInit = TRUE, priority = 100)
-
-  observeEvent(input$trend_subtab, {
-    trend_cache(NULL)
-    heat_cache(NULL)
-    gc(verbose = FALSE)
-  }, ignoreInit = TRUE, priority = 100)
-
+  
   observeEvent(input$slope_subtab, {
     if (identical(input$main_tab, "Slopes")) {
       prepared_cache(NULL)
       gc(verbose = FALSE)
     }
   }, ignoreInit = TRUE, priority = 100)
-
+  
   observeEvent(input$location, {
     bounds <- station_bounds(input$location)
     min_y <- lubridate::year(bounds$from)
@@ -258,12 +258,12 @@ server <- function(input, output, session) {
     lo <- max(min_y, 1990L)
     if (lo > max_y) lo <- min_y
     updateSliderInput(session, "year_slider",
-      min = min_y,
-      max = max_y,
-      value = c(lo, max_y)
+                      min = min_y,
+                      max = max_y,
+                      value = c(lo, max_y)
     )
   }, ignoreInit = FALSE)
-
+  
   current_ids <- reactive({
     req(input$location)
     if (identical(input$location, "ÖSTERREICH")) {
@@ -272,13 +272,13 @@ server <- function(input, output, session) {
       station_ids(metadata_hourly, input$location)
     }
   })
-
+  
   hour_data <- reactive({
     req(input$main_tab == "Current", input$variables_hourly)
     key <- paste(input$location, input$variables_hourly, Sys.Date(), sep = "|")
     old <- isolate(hour_cache())
     if (!is.null(old) && identical(old$key, key)) return(old$data)
-
+    
     v <- metadata_hourly$parameters |>
       filter(long_name == input$variables_hourly) |>
       pull(name)
@@ -303,13 +303,13 @@ server <- function(input, output, session) {
     hour_cache(list(key = key, data = result))
     result
   })
-
+  
   daily_data <- reactive({
     req(input$main_tab == "Current", input$variables_daily)
     key <- paste(input$location, input$variables_daily, Sys.Date(), sep = "|")
     old <- isolate(daily_cache())
     if (!is.null(old) && identical(old$key, key)) return(old$data)
-
+    
     v <- metadata_daily$parameters |>
       filter(long_name == input$variables_daily) |>
       pull(name)
@@ -337,7 +337,7 @@ server <- function(input, output, session) {
     daily_cache(list(key = key, data = dat))
     dat
   })
-
+  
   output$plot_aktuell <- renderPlotly({
     req(input$main_tab == "Current")
     d <- hour_data()
@@ -349,36 +349,58 @@ server <- function(input, output, session) {
       theme_bw()
     ggplotly(p)
   })
-
+  
   output$plot_history <- renderPlotly({
     req(input$main_tab == "Current")
     dat <- daily_data() |> filter(is.finite(var))
+    
     if (input$switch == "Smooth") {
       dat <- dat |>
-        mutate(is_currentyear = if_else(year == lubridate::year(Sys.Date()), "Current", "Historical"))
-      p <- ggplot(dat, aes(yearday, var, group = year, colour = is_currentyear)) +
-        geom_line(linewidth = 0.25, na.rm = TRUE) +
-        scale_colour_manual(values = c("Current" = "red", "Historical" = "grey")) +
+        mutate(is_currentyear = if_else(
+          year == lubridate::year(Sys.Date()),
+          "Current", "Historical"
+        ))
+      
+      p <- ggplot(dat, aes(yearday, var, group = year)) +
+        geom_line(
+          data = filter(dat, is_currentyear == "Historical"),
+          aes(colour = is_currentyear),
+          linewidth = 0.25,
+          na.rm = TRUE
+        ) +
+        geom_line(
+          data = filter(dat, is_currentyear == "Current"),
+          aes(colour = is_currentyear),
+          linewidth = 0.6,
+          na.rm = TRUE
+        ) +
+        scale_colour_manual(values = c(
+          "Historical" = "grey",
+          "Current" = "red"
+        )) +
         labs(x = "Yearday", y = input$variables_daily, colour = "Year") +
-        theme_bw()
+        theme_bw() 
+      
       ggplotly(p)
+      
     } else {
       heat <- dat |>
         group_by(year, yearday) |>
         summarise(var = mean(var, na.rm = TRUE), .groups = "drop")
+      
       plot_ly(heat,
-        x = ~yearday, y = ~factor(year), z = ~var,
-        type = "heatmap", colorscale = "Plasma"
+              x = ~yearday, y = ~factor(year), z = ~var,
+              type = "heatmap", colorscale = "Plasma"
       )
     }
   })
-
+  
   trend_data <- reactive({
     req(input$main_tab == "Trends", input$trend_subtab == "Trend", input$variables2)
     key <- paste(input$location, input$variables2, sep = "|")
     old <- isolate(trend_cache())
     if (!is.null(old) && identical(old$key, key)) return(old$data)
-
+    
     v <- metadata_daily$parameters |>
       filter(long_name == input$variables2) |>
       pull(name)
@@ -411,21 +433,31 @@ server <- function(input, output, session) {
     trend_cache(list(key = key, data = result))
     result
   })
-
+  
   heatwave_data <- reactive({
     req(input$main_tab == "Trends", input$trend_subtab == "Hitzewellen")
     req(length(input$year_slider) == 2L)
-    key <- paste(input$location, paste(input$year_slider, collapse = "-"), sep = "|")
+    
+    key <- paste(
+      input$location,
+      paste(input$year_slider, collapse = "-"),
+      sep = "|"
+    )
+    
     old <- isolate(heat_cache())
-    if (!is.null(old) && identical(old$key, key)) return(old$data)
-
+    if (!is.null(old) && identical(old$key, key)) {
+      return(old$data)
+    }
+    
     ids <- if (input$location == "ÖSTERREICH") {
       national_ids
     } else {
       station_ids(metadata_daily, input$location)
     }
+    
     start_date <- paste0(input$year_slider[1], "-01-01")
     end_date <- paste0(input$year_slider[2], "-12-31")
+    
     link <- paste0(
       "https://dataset.api.hub.geosphere.at/v1/station/historical/klima-v2-1d?",
       "parameters=tlmax&start=", start_date,
@@ -433,30 +465,88 @@ server <- function(input, output, session) {
       "&", id_query(ids),
       "&output_format=csv"
     )
-    df <- readr::read_csv(link, show_col_types = FALSE, progress = FALSE)
+    
+    df <- readr::read_csv(
+      link,
+      show_col_types = FALSE,
+      progress = FALSE
+    )
+    
     if (input$location == "ÖSTERREICH") {
-      df <- df |> group_by(time) |>
-        summarise(tlmax = mean(tlmax, na.rm = TRUE), .groups = "drop")
+      df <- df |>
+        group_by(time) |>
+        summarise(
+          tlmax = mean(tlmax, na.rm = TRUE),
+          .groups = "drop"
+        )
     }
-    result <- df |>
+    
+    hot_days <- df |>
       mutate(date = as.Date(time)) |>
+      group_by(date) |>
+      summarise(
+        tlmax = mean(tlmax, na.rm = TRUE),
+        .groups = "drop"
+      ) |>
+      filter(!is.na(date), is.finite(tlmax), tlmax > 30) |>
       arrange(date) |>
       mutate(
-        over_30 = is.finite(tlmax) & tlmax > 30,
-        continues = over_30 & lag(over_30, default = FALSE) &
-          as.numeric(date - lag(date, default = first(date))) == 1,
-        streak_group = cumsum(!continues)
+        new_wave = is.na(lag(date)) |
+          as.numeric(date - lag(date)) != 1,
+        wave_id = cumsum(new_wave)
+      )
+    
+    waves <- hot_days |>
+      group_by(wave_id) |>
+      summarise(
+        start = min(date),
+        duration = n(),
+        .groups = "drop"
       ) |>
-      filter(over_30) |>
-      group_by(streak_group) |>
-      filter(n() >= 3) |>
-      ungroup() |>
-      mutate(year = lubridate::year(date)) |>
+      filter(duration >= 3) |>
+      mutate(year = lubridate::year(start)) |>
       count(year, name = "heatwaves")
+    
+    result <- tibble(
+      year = seq(input$year_slider[1], input$year_slider[2])
+    ) |>
+      left_join(waves, by = "year") |>
+      mutate(heatwaves = coalesce(heatwaves, 0L))
+    
     heat_cache(list(key = key, data = result))
+    
     result
+    
   })
-
+  
+  
+  output$heatwave_plot <- renderPlotly({
+    req(input$main_tab == "Trends", input$trend_subtab == "Hitzewellen")
+    
+    df <- heatwave_data()
+    
+    plot_ly(
+      data = df,
+      x = ~year,
+      y = ~heatwaves,
+      type = "bar",
+      marker = list(
+        color = df$heatwaves,
+        colorscale = list(
+          list(0, "yellow"),
+          list(1, "red")
+        ),
+        showscale = TRUE,
+        colorbar = list(title = "Anzahl")
+      )
+    ) |>
+      layout(
+        xaxis = list(title = "Year"),
+        yaxis = list(title = "Anzahl der Hitzewellen"),
+        margin = list(l = 60, r = 80, b = 50, t = 30)
+      )
+  })
+  
   output$plot1 <- renderPlotly({
     req(input$main_tab == "Trends", input$trend_subtab == "Trend")
     df <- trend_data() |>
@@ -467,42 +557,29 @@ server <- function(input, output, session) {
       scale_fill_gradient(low = "blue", high = "red") +
       labs(y = "Abweichung vom Durchschnitt", fill = "Abweichung vom Durchschnitt") +
       geom_smooth(colour = "black", linewidth = 0.5, method = "lm", se = FALSE, na.rm = TRUE) +
-      theme_bw()
+      theme_bw()+ theme(legend.position = "top")
     ggplotly(p)
   })
-
+  
   output$text2 <- renderText({
     req(input$main_tab == "Trends", input$trend_subtab == "Trend")
     paste("Abweichung des Parameters", input$variables2, "vom Gesamtdurchschnitt in", input$location)
   })
-
+  
   output$text_heatwave <- renderText({
     req(input$main_tab == "Trends", input$trend_subtab == "Hitzewellen")
     "Anzahl der Hitzewellen pro Jahr"
   })
-
+  
   output$text_heatwave_def <- renderText({
     req(input$main_tab == "Trends", input$trend_subtab == "Hitzewellen")
     "Eine Hitzewelle wird festgestellt, sobald an mindestens drei Tagen in Folge die Maximaltemperatur 30 °C überschreitet."
   })
-
-  output$heatwave_plot <- renderPlotly({
-    req(input$main_tab == "Trends", input$trend_subtab == "Hitzewellen")
-    df <- heatwave_data()
-    shiny::validate(need(nrow(df) > 0, "Keine Hitzewellen im ausgewählten Zeitraum gefunden."))
-    p <- ggplot(df, aes(year, heatwaves, fill = heatwaves)) +
-      geom_col() +
-      scale_fill_gradient(low = "yellow", high = "red") +
-      labs(y = "Anzahl der Hitzewellen", x = "Year", fill = "Anzahl") +
-      scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
-      theme_bw()
-    ggplotly(p)
-  })
-
+  
   prepared <- reactive({
     req(input$main_tab %in% c("Slopes", "3D"))
     shiny::validate(need(file.exists(prepared_file),
-      "Die vorberechneten Daten fehlen. Bitte prepare_geovis.R lokal ausführen und data/geovis_precomputed.rds mit deployen."
+                         "Die vorberechneten Daten fehlen. Bitte prepare_geovis.R lokal ausführen und data/geovis_precomputed.rds mit deployen."
     ))
     old <- isolate(prepared_cache())
     if (!is.null(old)) return(old)
@@ -510,12 +587,12 @@ server <- function(input, output, session) {
     prepared_cache(dat)
     dat
   })
-
+  
   output$slope_stats <- renderText({
     req(input$main_tab == "Slopes", input$slope_subtab == "500m")
     prepared()$slope_stats
   })
-
+  
   output$plot_per_500m <- renderPlot({
     req(input$main_tab == "Slopes", input$slope_subtab == "500m")
     ggplot(prepared()$altitude_500m, aes(altitude_group, mean_slope)) +
@@ -525,7 +602,7 @@ server <- function(input, output, session) {
       labs(x = "Altitude [m]", y = "Mean slope [°C/year]") +
       theme_bw()
   })
-
+  
   output$plot_altitude_slope <- renderPlot({
     req(input$main_tab == "Slopes", input$slope_subtab == "Altitude Relation")
     ggplot(prepared()$grid, aes(altitude, slope)) +
@@ -534,12 +611,12 @@ server <- function(input, output, session) {
       labs(x = "Altitude [m]", y = "Temperature slope [°C/year]", fill = "Raster cells") +
       theme_bw()
   })
-
+  
   output$slope_findings <- renderText({
     req(input$main_tab == "Slopes", input$slope_subtab == "Nonlinear Effect")
     prepared()$slope_findings
   })
-
+  
   output$plot_altitude_gam <- renderPlot({
     req(input$main_tab == "Slopes", input$slope_subtab == "Nonlinear Effect")
     ggplot(prepared()$gam_prediction, aes(altitude, fit)) +
@@ -549,7 +626,7 @@ server <- function(input, output, session) {
       labs(x = "Altitude [m]", y = "Partial effect on temperature slope [°C/year]") +
       theme_bw()
   })
-
+  
   output$plot_altitude_effect <- renderPlot({
     req(input$main_tab == "Slopes", input$slope_subtab == "Spatial Influence")
     ggplot(prepared()$altitude_effect, aes(model, effect, fill = model)) +
@@ -559,7 +636,7 @@ server <- function(input, output, session) {
       theme_bw() +
       theme(legend.position = "none")
   })
-
+  
   output$plot_residual_map <- renderPlot({
     req(input$main_tab == "Slopes", input$slope_subtab == "Spatial Influence")
     ggplot(prepared()$grid, aes(X, Y, fill = residual_altitude)) +
@@ -569,7 +646,7 @@ server <- function(input, output, session) {
       labs(fill = "Residual", x = "X", y = "Y") +
       theme_bw()
   })
-
+  
   output$plot3d <- renderPlotly({
     req(input$main_tab == "3D")
     surf <- prepared()$surface
